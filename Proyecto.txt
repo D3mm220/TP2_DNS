@@ -1,0 +1,14 @@
+El proyecto se centra en la libreria dns, trabajando con la clase dns.resolver que se usa para esto mismo, realizar resoluciones DNS. Resolver da metodos para realizar
+ consultas DNS y con este el proyecto se centra en sacar información relacionada con el nombre del dominio.
+    En el proyecto vamos a sacar informacion mediante los registros que nos brinda .resolver (A,AAAA,NS,CNAME,MX,PTR,SOA y TXT).
+    
+        A: Se utiliza para sacar la direccion IPv4 asociada a un nombre de dominio (para lo q se usa resolver mayormente (explicacion en Definicion.txt)).
+        
+        AAAA: Se utiliza para sacar la direccion IPv6 asociada a un nombre de dominio.
+
+        NS: Brinda informacion de los servidores de nombre autoritativos para un dominio especifico (un poco de informacion en Definicion.txt). Al consultar con NS, se obtiene el 
+        nombre de los servidores que son responsables de administar la resolucion DNS para ese dominio.
+
+        CNAME: Se utiliza para 
+
+    
