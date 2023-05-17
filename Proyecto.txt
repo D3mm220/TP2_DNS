@@ -19,6 +19,7 @@ El proyecto se centra en la libreria dns, trabajando con la clase dns.resolver q
 
         SOA: Proporciona informacion sobre la autoridad del dominio.
 
-        TXT: 
+        TXT: Almacena texto libre o informacion estructurada en un formato legible para humanos. Se utiliza para almacenar registros de autenticacion de correo electronico (SPF,DKIM)
+        y otro datos relacionados con validacion de dominio y seguridad.
 
     
