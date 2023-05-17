@@ -15,7 +15,8 @@ El proyecto se centra en la libreria dns, trabajando con la clase dns.resolver q
         MX: Se utiliza para especificar los servidores de correo asociados a un dominio, obtendrias informacion sobre los servidores de correo
         que deben recibir los mensajes destinados a ese dominio
 
-        PTR: Se utiliza en las conversiones inversas de DNS. Al brindarle una direccion IP, este te da el nombre del dominio asociado a esa IP
+        PTR: Se utiliza en las conversiones inversas de DNS. Al brindarle una direccion IP, este te da el nombre del dominio asociado a esa IP o que forma parte de la infraestructra
+        del dominio
 
         SOA: Proporciona informacion sobre la autoridad del dominio.
 

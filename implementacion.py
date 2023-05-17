@@ -2,7 +2,7 @@
 
 import dns.resolver
 
-tiposRegistro = ['A','AAAA','NS','CNAME','MX','PTR','SOA','TXT']
+tiposRegistro = ['A','AAAA','NS','MX','SOA','TXT']
 
 try:
     dominio = input("Ingrese dominio: ")
