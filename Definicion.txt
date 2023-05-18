@@ -12,3 +12,8 @@ direcciones IP específicas. El resolver le pide la dirección IP y este como no
 Este se encarga de saber todo acerca del nombre de los dominios.(Las diferentes url de un mismo dominio por ejemplo: youtube.com y music.youtube.com). El resolver le pide la 
 dirección IP y el Servidor de Nombre Autoritario finalmente le da la dirección pedida. El resolver guarda la dirección en su caché DNS y le pasa la dirección al primer 
 dispositivo, haciendo que este también actualice su caché DNS. Finalmente, el dispositivo realiza comunicación con la página deseada
+
+Bibliografía:
+Sistema de nombres de dominio - Wikipedia, la enciclopedia libre
+DNS (Sistema de Nombres de Dominio) - Explicado Fácilmente - https://www.youtube.com/watch?v=sUhEqT_HSBI&ab_channel=ProfeSang
+Chat GPT
