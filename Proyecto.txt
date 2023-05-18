@@ -23,4 +23,10 @@ El proyecto se centra en la libreria dns, trabajando con la clase dns.resolver q
         TXT: Almacena texto libre o informacion estructurada en un formato legible para humanos. Se utiliza para almacenar registros de autenticacion de correo electronico (SPF,DKIM)
         y otro datos relacionados con validacion de dominio y seguridad.
 
+El proyecto se dividió en 3 opciones porque no todas las cosas pueden ser pedidas juntas (CNAME deberia pero bueno cosas de la programación),
+dividido en PTR, CNAME y el resto.
+
+Depende la opcion que elijas, se carga una funcion para cumplir con lo seleccionado.
+
+
     
