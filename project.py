@@ -8,7 +8,7 @@ def option1():
     try:
         dominio = input("Ingrese dominio: ")
     except IndexError:
-        return 'Syntax Error'
+        print('Syntax Error')
     for registro in tiposRegistro:
         try:
             respuesta = dns.resolver.resolve(dominio, registro)
@@ -17,17 +17,17 @@ def option1():
             for server in respuesta:
                 print(server.to_text())
         except dns.resolver.NoAnswer:
-            pass
+            print ("No se encontro nada")
         except dns.resolver.NXDOMAIN:
-            return f'{dominio} no existe'
+            print(f'El dominio {dominio} no existe')
         except KeyboardInterrupt:
-            return 'No apretes cualquier cosa'
+            print("No apretes cualquier cosa")
 
 def option2():
     try:
         direccionIP = input("Ingrese direccion IP: ")
     except IndexError:
-        return 'Syntax Error'
+        print('Syntax Error')
     try:
         dnsReserved = dns.reversename.from_address(direccionIP)
         answs = dns.resolver.resolve(dnsReserved, 'PTR')
@@ -36,17 +36,17 @@ def option2():
         for answ in answs:
             print(answ.target)
     except dns.resolver.NoAnswer:
-        pass
+        print("No se encontro el registro CNAME para")
     except dns.resolver.NXDOMAIN:
         print(f'la direccion {direccionIP} no existe')
     except KeyboardInterrupt:
-        return "No apretes cualquier cosa"
+        print("No apretes cualquier cosa")
 
 def option3():
     try:
         dominio = input("Ingrese dominio: ")
     except IndexError:
-        return 'Syntax Error'
+        print('Syntax Error')
     try:
         answers = dns.resolver.resolve(dominio, 'CNAME')
         for rdata in answers:
@@ -58,7 +58,7 @@ def option3():
     except dns.exception.DNSException as e:
         print(f'Ocurrió un error: {str(e)}')
     except KeyboardInterrupt:
-        return "No apretes cualquier cosa"
+        print("No apretes cualquier cosa")
 
 def chooser(option):
     if option == "1":
