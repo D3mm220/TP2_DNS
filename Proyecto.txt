@@ -1,32 +1,39 @@
-El proyecto se centra en la libreria dns, trabajando con la clase dns.resolver que se usa para esto mismo, realizar resoluciones DNS. Resolver da metodos para realizar
- consultas DNS y con este el proyecto se centra en sacar información relacionada con el nombre del dominio.
-    En el proyecto vamos a sacar informacion mediante los registros más importante que nos brinda .resolver (A,AAAA,NS,CNAME,MX,PTR,SOA y TXT).
-    
-        A: Se utiliza para sacar la direccion IPv4 asociada a un nombre de dominio (para lo q se usa resolver mayormente (explicacion en Definicion.txt)).
-        
-        AAAA: Se utiliza para sacar la direccion IPv6 asociada a un nombre de dominio.
+(ATENCION: PREFERIBLE LEER LOS .TXT DE LA CARPETA TP2_DNS, EN EL ARCHIVO .DOCS DONDE ES MAS LEGIBLE)
 
-        NS: Brinda informacion de los servidores de nombre autoritativos para un dominio especifico (un poco de informacion en Definicion.txt). Al consultar con NS, se obtiene el 
-        nombre de los servidores que son responsables de administar la resolucion DNS para ese dominio.
+Proyecto:
+
+El proyecto se centra en la librería dns, trabajando con la clase dns.resolver que se usa para esto mismo, realizar resoluciones DNS. Resolver da métodos para realizar
+ consultas DNS y con este el proyecto se centra en sacar información relacionada con el nombre del dominio.
+    En el proyecto vamos a sacar información mediante los registros más importante que nos brinda .resolver (A,AAAA,NS,CNAME,MX,PTR,SOA y TXT).
+    
+        A: Se utiliza para sacar la dirección IPv4 asociada a un nombre de dominio (para lo que se usa resolver mayormente (explicación en Definición.txt)).
+        
+        AAAA: Se utiliza para sacar la dirección IPv6 asociada a un nombre de dominio.
+
+        NS: Brinda información de los servidores de nombre autoritativos para un dominio específico (un poco de información en Definición.txt). Al consultar con NS, se obtiene el 
+        nombre de los servidores que son responsables de administrar la resolución DNS para ese dominio.
 
         CNAME: Se utiliza para crear un alias para un nombre de dominio, y es utilizado para redirigir un nombre de dominio a otro nombre de
         dominio (ejemplo bobo: www.ejemplo.com hacia ejemplo.com)
 
-        MX: Se utiliza para especificar los servidores de correo asociados a un dominio, obtendrias informacion sobre los servidores de correo
+        MX: Se utiliza para especificar los servidores de correo asociados a un dominio, obtendrías información sobre los servidores de correo
         que deben recibir los mensajes destinados a ese dominio
 
-        PTR: Se utiliza en las conversiones inversas de DNS. Al brindarle una direccion IP, este te da el nombre del dominio asociado a esa IP o que forma parte de la infraestructra
+        PTR: Se utiliza en las conversiones inversas de DNS. Al brindarle una dirección IP, este te da el nombre del dominio asociado a esa IP o que forma parte de la infraestructura
         del dominio
 
-        SOA: Proporciona informacion sobre la autoridad del dominio.
+        SOA: Proporciona información sobre la autoridad del dominio.
 
-        TXT: Almacena texto libre o informacion estructurada en un formato legible para humanos. Se utiliza para almacenar registros de autenticacion de correo electronico (SPF,DKIM)
-        y otro datos relacionados con validacion de dominio y seguridad.
+        TXT: Almacena texto libre o información estructurada en un formato legible para humanos. Se utiliza para almacenar registros de autenticación de correo electrónico (SPF,DKIM)
+        y otros datos relacionados con la validación de dominio y seguridad.
 
 El proyecto se dividió en 3 opciones porque no todas las cosas pueden ser pedidas juntas (CNAME deberia pero bueno cosas de la programación),
 dividido en PTR, CNAME y el resto.
 
-Depende la opcion que elijas, se carga una funcion para cumplir con lo seleccionado.
+Depende la opción que elijas, se carga una función para cumplir con lo seleccionado.
 
-
-    
+Bibliografía:
+Sistema de nombres de dominio - Wikipedia, la enciclopedia libre
+DNS (Sistema de Nombres de Dominio) - Explicado Fácilmente
+RFC 1034
+Chat GPT

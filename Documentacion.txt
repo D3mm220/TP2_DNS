@@ -1,0 +1,1018 @@
+(ATENCION: PREFERIBLE LEER LOS .TXT DE LA CARPETA TP2_DNS, EN EL ARCHIVO .DOCS DONDE ES MAS LEGIBLE)
+
+Documentación extendida:
+
+Documento realizado a partir del rfc 1034
+
+2. INTRODUCCIÓN
+
+2.1 La historia de los nombres de dominio
+
+En el desarrollo del sistema de dominios en Internet, se han dado los siguientes factores:
+
+- En un principio, el mapeo de direcciones a nombres de host era gestionado por el Network Information Center (NIC) en un solo archivo llamado HOSTS.TXT, el cual se distribuía a todos los hosts a través de FTP. Este enfoque generaba una carga considerable en los NIC debido al crecimiento explosivo en el número de hosts, ya que el ancho de banda consumido en la distribución era proporcional al cuadrado del número de hosts.
+
+- A medida que las redes evolucionaron, los hosts originales de ARPANET fueron reemplazados por redes locales de estaciones de trabajo. Las organizaciones empezaron a administrar localmente sus propios nombres y direcciones, pero dependían del NIC para actualizar HOSTS.TXT con esos cambios en Internet. Además, las organizaciones deseaban tener alguna estructura local en el espacio de nombres.
+
+- Con la sofisticación creciente de las aplicaciones en Internet, surgió la necesidad de contar con un servicio de nombres de propósito general.
+
+Estas circunstancias llevaron a varias ideas sobre el espacio de nombres y su gestión. Se propuso la idea de un espacio de nombres jerárquico que se correspondiera con la estructura de la organización, utilizando el carácter "." como separador entre los niveles de la jerarquía. Se describió un diseño en los RFC-882 y RFC-883 que utilizaba una base de datos distribuida y recursos generalizados. A partir de la experiencia de implementaciones anteriores, el sistema evolucionó hasta llegar al escenario descrito en este documento.
+
+Es importante destacar que los términos "dominio" o "nombre de dominio" se utilizan en diversos contextos más allá de lo que DNS describe. Por ejemplo, el término "nombre de dominio" a menudo se utiliza para referirse a un nombre con una estructura indicada por puntos, sin relación directa con DNS. Esto se aplica, por ejemplo, en el direccionamiento de correo electrónico.
+
+
+2.2 Objetivos del diseño DNS
+
+Los objetivos del diseño del DNS se centran en su estructura y son los siguientes:
+
+- El objetivo principal es establecer un espacio de nombres consistente que se utilice para referirse a los recursos. Para evitar problemas causados por extensiones especiales, los nombres no necesitarán contener identificadores de red, direcciones, rutas o información similar como parte del nombre.
+
+- La capacidad total de la base de datos y la frecuencia de las actualizaciones deben mantenerse de manera distribuida, con cachés locales para mejorar el rendimiento.
+
+- Intentar mantener una copia consistente de la base de datos completa resultaría cada vez más costoso y difícil, por lo tanto, es mejor descartar esa opción. Este mismo principio se aplica a la estructura del espacio de nombres y a los mecanismos específicos para crear y eliminar nombres, los cuales también deben ser distribuidos.
+
+- Si comparamos el costo de adquisición de datos, la velocidad de las actualizaciones y la precisión de las cachés, la prioridad recae en la adquisición de datos.
+
+- La instalación del sistema debe ser generalmente sencilla y no limitarse a una aplicación en particular. Los nombres se utilizan para recuperar direcciones de host, datos de buzones de correo y otros datos que aún no están determinados. Todos los datos asociados con un nombre se etiquetan con un tipo y las solicitudes pueden limitarse a un solo tipo.
+
+- Dado que se desea que el espacio de nombres sea manejable y distinga entre redes y aplicaciones, se puede utilizar el mismo espacio de nombres con diferentes familias de protocolos o administradores. Por ejemplo, aunque todos los protocolos incluyen direcciones, los formatos de las direcciones de host son diferentes dependiendo de los protocolos. El DNS etiqueta todos los datos con una clase, al igual que con el tipo, para que se puedan utilizar diferentes formatos de datos para tipos de direcciones de manera paralela.
+
+- Se busca que las transacciones entre los servidores de nombres sean independientes del sistema de comunicaciones que las realiza. Algunos sistemas pueden utilizar datagramas para consultas y respuestas, y solo establecer circuitos virtuales para transacciones confiables (actualizaciones de bases de datos, transacciones grandes), mientras que otros sistemas pueden utilizar solo circuitos virtuales.
+
+- El sistema debe ser manejable independientemente de las capacidades del host, de modo que se pueda utilizar tanto en computadoras personales como en servidores, aunque su uso pueda variar en diferentes contextos.
+
+2.3 Suposiciones sobre el uso 
+
+La organización del sistema de dominios se basa en algunas suposiciones sobre las necesidades y patrones de uso de su comunidad de usuarios, y está diseñado para evitar muchos de los problemas complicados encontrados en los sistemas de bases de datos de propósito general.
+
+Las suposiciones son las siguientes:
+
+- El tamaño total de la base de datos será inicialmente proporcional al número de hosts que utilizan el sistema y podrá crecer eventualmente en proporción al número de usuarios de los hosts, así como a las direcciones de correo y cualquier otra información que se agregue al sistema de dominios.
+
+- La mayoría de los datos del sistema cambiarán muy lentamente, como las direcciones de correo y las direcciones de los hosts. El sistema debe adaptarse a cambios rápidos de datos cuando sea necesario, en cuestión de segundos o minutos.
+
+- Los límites administrativos utilizados para distribuir las responsabilidades de la base de datos normalmente se corresponden con organizaciones que tienen uno o más hosts. Cada organización responsable de un conjunto particular de dominios debe tener servidores de nombres redundantes, ya sea utilizando hosts propios o hosts externos a la organización.
+
+- Los clientes del sistema de dominio deben identificar preferentemente servidores de nombres de confianza antes de aceptar referencias de servidores de nombres no confiables.
+
+- El acceso a la información es más crítico que las actualizaciones instantáneas o las garantías de consistencia. Esto significa que el proceso de actualización permite que las actualizaciones se propaguen fuera del sistema de dominio de los usuarios en lugar de garantizar que todas las copias se actualicen simultáneamente. Cuando las actualizaciones no están disponibles debido a fallas en la red o en el host, es común continuar utilizando la información anterior hasta que se actualice. El modelo general implica que las copias se distribuyan con tiempos de refresco. El responsable de la distribución establece el valor de tiempo de refresco, y el receptor de la distribución es responsable de realizar el refresco. En situaciones especiales, se pueden establecer intervalos de refresco muy cortos o el propietario puede prohibir las copias.
+
+- En cualquier sistema que tenga una base de datos distribuida, puede haber un servidor de nombres en particular que realice consultas que solo puedan ser respondidas por otro servidor. Las dos formas generales de abordar esto son la "recursividad", en la cual el primer servidor continúa la consulta del cliente en otro servidor, y la "iteratividad", en la cual el servidor refiere al cliente a otro servidor y permite que el cliente continúe la consulta. Ambos procesos tienen ventajas y desventajas, pero la "iteratividad" es la preferida para los estilos de acceso mediante datagramas. Los sistemas de dominios requieren una implementación de la iteratividad y permiten la recursividad opcionalmente.
+
+El sistema de dominios asume que todos los datos originados en los archivos maestros se distribuyen a los hosts del sistema de dominios. Estos archivos maestros son actualizados por administradores locales del sistema. Los archivos maestros son archivos de texto legibles por un servidor de nombres local, lo que los hace disponibles desde los servidores de nombres para los usuarios del sistema de dominio. Los programas de usuario acceden a los servidores de nombres a través de programas estándar llamados resolutores.
+
+El formato estándar de
+
+ los archivos maestros permite que se intercambien entre hosts (a través de FTP, correo u otro mecanismo). Esta ventaja es útil cuando una organización desea tener un dominio pero no quiere tener un servidor de nombres. La organización puede mantener los archivos maestros localmente utilizando un editor de texto, enviarlos a un host remoto fuera de la organización que ejecute un servidor de nombres y coordinar con el administrador de sistemas del servidor de nombres para cargar los archivos.
+
+Los servidores de nombres de cada host y los resolutores son configurados por un administrador local de sistemas. En cada servidor de nombres, esta configuración incluye la identidad de los archivos maestros locales e instrucciones en cada archivo maestro no local para cargarse en servidores fuera de la organización. El servidor de nombres utiliza los archivos maestros o copias para cargar sus zonas. En el caso de los resolutores, la configuración identifica a los servidores de nombres que deben ser primarios.
+
+El sistema de dominio define los procedimientos para acceder a los datos y hacer referencia a otros servidores de nombres. También define los procedimientos para el almacenamiento en caché de datos y la actualización periódica de los datos definidos por el administrador de sistemas.
+
+El administrador de sistemas ofrece:
+
+- La definición de los límites de zona.
+
+- Los archivos maestros de datos.
+
+- Actualizaciones de archivos maestros.
+
+- Establecimiento de políticas de refresco deseadas.
+
+El sistema de dominios ofrece:
+
+- Formatos estándar para datos de recursos.
+
+- Métodos estándar para consultar la base de datos.
+
+- Métodos estándar para actualizar los datos locales de los servidores de nombres desde servidores de nombres fuera de la organización.
+
+
+2.4 Elementos de un DNS
+
+Un DNS (Sistema de Nombres de Dominio) consta de tres componentes principales:
+-Espacio de Nombres de Dominio y Registros de Recursos: se refiere a las especificaciones para un árbol estructurado de espacio de nombres y los datos asociados con los nombres. Cada nodo y subnodo del árbol de espacio de nombres del dominio tiene asociada una información específica y se pueden solicitar operaciones para extraer tipos específicos de información de un conjunto en particular. Por ejemplo, en Internet, se utilizan nombres de dominio para identificar hosts, y las consultas de recursos devuelven la dirección del host de Internet.
+-Servidores de Nombres: son programas de servidor que almacenan y mantienen la información estructurada del árbol de dominio. Un servidor de nombres puede almacenar en caché la estructura o establecer información en cualquier parte del árbol de dominio. Por lo general, un servidor de nombres tiene toda la información de los subconjuntos del espacio de dominios y punteros a otros servidores de nombres que se pueden utilizar para obtener información de cualquier parte del árbol de dominio. Los servidores de nombres son la autoridad para las partes del espacio de nombres de las que tienen información completa. La información autoritativa se organiza en unidades llamadas zonas, y estas zonas se pueden distribuir automáticamente en los servidores de nombres para proporcionar redundancia en los datos de la zona.
+-Resolutores: son programas que extraen información de los servidores de nombres en respuesta a consultas de los clientes. Los resolutores deben tener acceso al menos a un servidor de nombres que pueda responder directamente a la consulta, o pueden continuar la consulta utilizando referencias a otros servidores de nombres. Los resolutores suelen ser rutinas de sistema accesibles directamente por programas de usuario, por lo que no se requiere un protocolo adicional entre el resolutor y el programa de usuario.
+
+Estos tres componentes corresponden a los tres niveles o perspectivas de un sistema de dominio:
+
+.Desde el punto de vista del usuario, se accede al sistema de dominio mediante un procedimiento simple o una llamada al sistema operativo a un resolutor local. El espacio de nombres consiste en un solo árbol, y el usuario puede consultar información de cualquier sección del árbol.
+
+.Desde el punto de vista del resolutor, el sistema de dominio está compuesto por un número desconocido de servidores de nombres. Cada servidor de nombres tiene una o más porciones de los datos totales del árbol, pero el resolutor ve cada una de esas bases de datos esencialmente de forma estática.
+
+.Desde el punto de vista del servidor de nombres, el sistema de dominio consiste en conjuntos separados de información local llamados zonas. El servidor de nombres tiene copias locales de algunas de las zonas y debe actualizar periódicamente estas zonas desde las copias maestras en archivos locales o en servidores de nombres externos a la organización. El servidor de nombres debe procesar simultáneamente las consultas que llegan desde los resolutores.
+
+En términos de rendimiento, las implementaciones pueden combinar estas funciones. Por ejemplo, un resolutor ubicado en la misma máquina que el servidor de nombres puede compartir una base de datos que incluya las zonas gestionadas por el servidor de nombres y la caché gestionada por el resol
+
+3. ESPACIO DE NOMBRES DE DOMINIO y REGISTROS DE RECURSOS
+
+3.1 Especificaciones y terminología del espacio de nombres
+
+El espacio de nombres de dominio se representa como una estructura de árbol. Cada nodo y hoja en el árbol corresponde a un conjunto de recursos (que debe estar vacío). En el sistema de dominio, no hay distinción entre el uso de nodos internos y hojas, y en este documento se utiliza el término "nodo" para referirse a ambos.
+
+Cada nodo tiene una etiqueta, que puede tener un tamaño variable entre 0 y 63 octetos. Los nodos hermanos no necesariamente tienen la misma etiqueta, mientras que nodos no hermanos pueden compartir la misma etiqueta. Existe una etiqueta reservada, que es nula (tamaño cero) y se utiliza para representar la raíz del árbol.
+
+El nombre de dominio de un nodo es la lista de etiquetas en el camino desde la raíz del árbol hasta el nodo. Por convención, las etiquetas que componen un nombre de dominio se leen de izquierda a derecha, de la más específica (más alejada de la raíz) a la menos específica (más cercana a la raíz).
+
+Internamente, los programas que manipulan nombres de dominio los representan como secuencias de etiquetas, donde cada etiqueta consta de un byte que indica su longitud, seguido de una cadena de bytes que representa la etiqueta en sí. Dado que todos los nombres de dominio terminan con la raíz, que se representa con una etiqueta nula, estas representaciones internas pueden utilizar una longitud de byte cero para indicar el final de un nombre de dominio.
+
+Por convención, los nombres de dominio pueden almacenarse en mayúsculas y/o minúsculas, pero las comparaciones de nombres de dominio se realizan sin tener en cuenta las mayúsculas/minúsculas, asumiendo el conjunto de caracteres ASCII y ordenándolos en orden ascendente desde el bit 0. Esto significa que puedes crear un nodo con la etiqueta "A" o un nodo con la etiqueta "a", pero no puedes tener ambos como hermanos. Puedes referirte a ellos como "a" o "A". Al recibir un nombre de dominio o etiqueta, puedes utilizar cualquier caso. La razón detrás de esta opción es que en el futuro puede ser necesario agregar nombres de dominio totalmente en binario para nuevos servicios, respetando los servicios existentes.
+
+Cuando un usuario necesita ingresar un nombre de dominio, se omite la longitud de cada etiqueta y las etiquetas se separan con puntos ("."). Un nombre de dominio completo debe terminar con un punto. Esta propiedad sirve para distinguir entre:
+
+Una cadena de caracteres que representa un nombre de dominio completo (a menudo llamado "absoluto"), por ejemplo, "poneria.ISI.EDU."
+
+Una cadena de caracteres que representa el inicio de las etiquetas de un nombre de dominio incompleto y debe completarse por algún software local con información del dominio local (a menudo llamado "relativo"), por ejemplo, "poneria" dentro del dominio ISI.EDU.
+
+Los nombres relativos están asociados a un origen bien conocido o a una búsqueda en una lista de dominios. Los nombres relativos aparecen con mayor frecuencia en la interfaz de usuario, donde su representación puede variar entre implementaciones. También aparecen en archivos maestros, donde son relativos a un solo nombre de dominio de origen. La interpretación más común utiliza la raíz (".") como el origen o uno de los miembros de la lista de búsqueda, por lo tanto, un nombre relativo con múltiples etiquetas suele omitir el punto (".") de origen para ahorrar un carácter.
+
+Para simplificar las implementaciones, el número total de octetos que representan un nombre de dominio (la suma de todos los octetos de todas las etiquetas y las longitudes de las etiquetas) está limitado a 255.
+
+Un dominio se identifica por su nombre de dominio, que corresponde a la parte del espacio de nombres de dominio que pertenece al dominio en cuestión. Un dominio se considera un subdominio de otro dominio si está contenido dentro de ese dominio. Esta relación se puede verificar si el nombre del subdominio termina con el nombre de dominio que lo contiene. Por ejemplo, A.B.C.D es un subdominio de B.C.D, C.D, D y "".
+
+3.2 Pautas administrativas en uso
+
+Como parte de la política, las especificaciones técnicas del DNS no siguen una estructura de árbol específica ni reglas para seleccionar etiquetas; su objetivo es ser lo más general posible y pueden ser utilizadas para crear aplicaciones de manera arbitraria. El sistema fue diseñado de tal manera que el espacio de nombres no necesita estar organizado dentro de los límites de una red o servidores de nombres, entre otros. La razón detrás de esto no es que el espacio de nombres tenga una semántica implícita, sino que la elección de la semántica debe ser abierta según el problema que se esté abordando, y diferentes partes del árbol pueden tener semánticas implícitas distintas. Por ejemplo, el dominio IN-ADDR.ARPA está organizado y distribuido por redes y direcciones de host porque su función es traducir números de red o host a nombres, mientras que los dominios NetBIOS [RFC-1001], [RFC-1002] son planos debido a los requisitos de su aplicación.
+
+No obstante, existen algunas pautas que se aplican a las partes "normales" del espacio de nombres utilizadas para hosts, direcciones de correo, etc., con el fin de hacer que el espacio de nombres sea más uniforme, extensible y minimizar problemas de conversión de antiguas tablas de hosts. Las decisiones políticas para los niveles superiores del árbol tienen su origen en el RFC-920. La política actual para los niveles superiores se detalla en el [RFC-1032]. La conversión de MILNET se aborda en el [RFC-1031].
+
+Los dominios inferiores que eventualmente se dividen en múltiples zonas deben proporcionar ramas en la parte superior del dominio para permitir esa futura división sin necesidad de cambiar nombres. Las etiquetas de nodos que utilizan caracteres especiales, como dígitos de control, pueden no funcionar en software antiguo que dependa de opciones más restrictivas.
+
+3.3 Pautas técnicas en uso
+
+Antes de utilizar DNS para gestionar información de nombres para cualquier tipo de objeto, se requieren dos cosas:
+
+Una convención para mapear entre nombres de objetos y nombres de dominio. Esto describe el acceso a la información de un objeto.
+Tipos de RR (registros de recursos) y formatos de datos para describir el objeto.
+Estas reglas pueden ser muy simples o muy complejas. Con frecuencia, el diseñador debe tener en cuenta los formatos de cuentas existentes y planificarlos de manera que permitan la compatibilidad futura. Puede ser necesario realizar múltiples mapeos o niveles de mapeo.
+
+Para los hosts, el mapeo depende de la sintaxis existente de los nombres de hosts, que es un subconjunto de la representación normal en texto de los nombres de dominio. Junto con los formatos RR, se utilizan para describir direcciones de hosts, entre otros. Dado que se requiere un mapeo inverso confiable de direcciones a nombres de hosts, dentro del dominio IN-ADDR.ARPA también se define un mapeo especial de direcciones.
+
+Para las direcciones de correo, el mapeo es un poco más complejo. La dirección de correo típica "<parte-local>@<dominio-correo>" se mapea a un nombre de dominio mediante la conversión de "<parte-local>" en una sola etiqueta (sin los puntos que pueda contener), convirtiendo "<dominio-correo>" en un nombre de dominio utilizando el formato de texto habitual para los nombres de dominio (los puntos indican la separación de etiquetas). Luego, se concatenan ambas partes para formar un único nombre de dominio.
+
+De esta manera, la dirección de correo HOSTMASTER@SRI-NIC.ARPA se representa como HOSTMASTER.SRI-NIC.ARPA en el nombre de dominio. Es importante tener en cuenta que las razones detrás de este diseño también deben considerarse en el contexto de las cuentas para servidores de correo [RFC-974].
+
+La definición de estas reglas no concierne al usuario típico, pero es importante que se comprenda que, por lo general, estas reglas son el resultado de numerosos compromisos entre el deseo de mantener una alta compatibilidad con el pasado, las interacciones entre diferentes definiciones de objetos y la necesidad inevitable de agregar nuevas características al definir las reglas. La forma en que DNS admite algunos objetos es a menudo más crucial que las restricciones inherentes a ellos.
+
+3.4 Ejemplo de espacio de nombres
+
+La siguiente figura muestra una parte del espacio de nombres de dominio actual que se utiliza en varios ejemplos de este RFC. Cabe destacar que el árbol representado es un subconjunto más pequeño del espacio de nombres actual.
+
+
+
+En este ejemplo, el dominio raíz tiene tres subdominios inmediatos: MIL, EDU y ARPA. El dominio LCS.MIT.EDU tiene un subdominio inmediato llamado XX.LCS.MIT.EDU. Todas las hojas también son dominios.
+
+3.5 Sintaxis de nombres preferida
+
+
+3.5. Sintaxis de nombres preferida
+
+Las especificaciones DNS se esfuerzan por ser lo más generales posible en cuanto a las reglas para construir nombres de dominio.
+
+La idea es que cualquier objeto existente pueda expresarse como un nombre de dominio con cambios mínimos. Sin embargo, al asignar un nombre de dominio a un objeto, el usuario prudente seleccionará un nombre que cumpla las reglas del sistema de dominios y las del objeto, ya sean publicadas o implícitas por los programas existentes.
+
+Por ejemplo, al nombrar un dominio de correo, el usuario puede cumplir las reglas establecidas en este memorándum y en el RFC-822. Al crear un nuevo nombre de host, se seguirán las reglas antiguas de HOSTS.TXT. Esto evita problemas con el software antiguo al utilizar nombres de dominio.
+
+La siguiente sintaxis generalmente no presenta problemas con muchas aplicaciones que utilizan nombres de dominio (correo, TELNET).
+
+  <dominio> ::= <subdominio> | " "
+
+  <subdominio> ::= <etiqueta> | <subdominio> "." <etiqueta>
+
+  <etiqueta> ::= <letra> [ [ <ldh-str> ] <let-dig> ]
+
+  <ldh-str> ::= <let-dig-hyp> | <let-dig-hyp> <ldh-str>
+
+  <let-dig-hyp> ::= <let-dig> | "-"
+
+  <let-dig> ::= <letra> | <digito>
+
+  <letra> ::= cualquiera de los 52 caracteres alfabéticos desde la A a la Z, y de la a a la z
+
+  <digito> ::= cualquiera de los 10 dígitos entre 0 y 9
+
+Es importante destacar que, aunque se considera el uso de mayúsculas y minúsculas en los nombres de dominio, no es significativo. En otras palabras, dos nombres con las mismas letras pero con diferente uso de mayúsculas y minúsculas se tratan de la misma manera.
+
+Las etiquetas deben seguir las reglas establecidas para los nombres de hosts de ARPANET. Deben comenzar con una letra, terminar con una letra o dígito, y solo pueden contener letras, dígitos y guiones. Las etiquetas tienen un límite de 63 caracteres.
+
+Por ejemplo, los siguientes strings identifican a los hosts en Internet:
+  A.ISI.EDU  XX.LCS.MIT.EDU  SRI-NIC.ARPA
+
+3.6 Registros de recursos
+
+Un nombre de dominio identifica a un nodo. Cada nodo tiene un conjunto de información de recursos, que inicialmente está vacío. El conjunto de información de recursos asociado con un nombre en particular está compuesto por varios registros de recursos (RRs). El orden de los RRs en un conjunto no es significativo y no es necesario para los servidores de nombres, resolutores u otras partes del DNS.
+
+Cuando hablamos de un RR específico, asumimos que tiene lo siguiente:
+
+Propietario: es el nombre de dominio donde se encuentra.
+Tipo: es un valor codificado de 16 bits que especifica el tipo de recurso en este RR. Los tipos se refieren a recursos abstractos. Este memorándum utiliza los siguientes tipos:
+A: una dirección de host.
+CNAME: identifica un nombre canónico de un alias.
+HINFO: identifica la CPU y el sistema operativo del host.
+MX: identifica un servidor de correo para el dominio [RFC-974].
+NS: el servidor de nombres autoritativo para el dominio.
+PTR: un puntero a otra parte del espacio de nombres de dominio.
+SOA: identifica el comienzo de la zona de autoridad.
+Clase: es un valor codificado de 16 bits que identifica una familia de protocolos o una instancia de un protocolo. Este memorándum utiliza las siguientes clases:
+IN: el sistema de Internet.
+CH: el sistema Caos.
+TTL: tiempo de vida del RR. Este campo es un entero de 32 bits en unidades de segundo y se utiliza principalmente en los resolutores cuando almacenan en caché RRs. El TTL describe cuánto tiempo puede estar en caché un RR antes de que deba ser eliminado.
+RDATA: es el tipo y, a veces, los datos dependiendo de la clase, que describen el recurso. Por ejemplo:
+A: para la clase IN, es una dirección IP de 32 bits. Para la clase CH, es un nombre de dominio seguido de una dirección Caos octal de 16 bits.
+CNAME: es un nombre de dominio.
+MX: es un valor de preferencia de 16 bits (cuanto menor sea, mayor prioridad) seguido de un nombre de host que actúa como servidor de correo para el dominio propietario.
+NS: es un nombre de host.
+PTR: es un nombre de dominio.
+SOA: tiene varios campos.
+El nombre del propietario a menudo se sobreentiende en lugar de formar parte integral del RR. Por ejemplo, muchos servidores de nombres internamente forman una estructura de árbol o hash para el espacio de nombres y encadenan los RRs fuera de los nodos. El resto de las partes del RR son la cabecera indexada (tipo, clase, TTL), que se mantiene constante para todos los RRs, y la parte variable (RDATA), que contiene los datos específicos del recurso descrito.
+
+El TTL es el límite de tiempo que un RR puede permanecer en la memoria caché. Este límite no se aplica a los datos autoritativos en las zonas, aunque estos también tienen un tiempo de vida controlado por las políticas de actualización de la zona. El TTL es asignado por el administrador de la zona donde se origina el dato. Mientras que los TTL cortos se utilizan para minimizar la caché y un TTL de cero prohíbe el almacenamiento en caché, en la práctica, en Internet, se sugiere que los tiempos sean de días para un host típico. Si se espera un cambio, el TTL puede reducirse antes del cambio para minimizar inconsistencias durante la transición, y después del cambio, se puede incrementar el TTL para restaurar su valor original.
+
+Los datos en la sección RDATA de los RRs son una combinación de cadenas binarias y nombres de dominio. Con frecuencia, los nombres de dominio se utilizan como "punteros" a otros datos en el DNS.
+
+3.6.1 Expresión textual de los RRs
+
+Los RRs se representan en forma binaria en los paquetes del protocolo DNS y generalmente se representan en un formato de alto nivel cuando se guardan en un servidor de nombres o resolutor. En este documento, adoptaremos un estilo similar al utilizado en los archivos maestros para mostrar el contenido de los RRs. En este formato, la mayoría de los RRs se muestran en una línea, aunque es posible que las líneas siguientes utilicen referencias.
+
+El inicio de la línea corresponde al propietario del RR. Si la línea comienza con un espacio en blanco, se asume que el propietario es el mismo que el del RR anterior. A menudo se incluyen líneas en blanco para una mejor visualización.
+
+Después del propietario, se especifica el TTL, el tipo y la clase del RR. La clase y el tipo utilizan la mnemotecnia mencionada anteriormente, y el TTL es un número entero que precede al campo de tipo. Para evitar ambigüedades en la sintaxis, la mnemotecnia del tipo y la clase son diferentes, los TTL son números enteros y la mnemotecnia del tipo siempre se coloca al final. En los ejemplos, a menudo se omiten los valores de clase IN y TTL para mayor claridad.
+
+Los datos de recursos de la sección RDATA de un RR dado se representan de acuerdo a la representación típica de esos datos.
+
+Por ejemplo, la representación de los RRs en un mensaje es la siguiente:
+ISI.EDU.                    MX      10 VENERA.ISI.EDU.
+                                  MX      10 VAXA.ISI.EDU.
+VENERA.ISI.EDU.    A       128.9.0.32
+                                 A       10.1.0.52
+VAXA.ISI.EDU.         A       10.2.0.27
+                                 A       128.9.0.33
+
+El RR MX tiene una sección RDATA que consiste en un número de 16 bits seguido de un nombre de dominio. La dirección del RR A es una dirección IP estándar de Internet de 32 bits.
+
+El ejemplo anterior muestra seis RRs, con dos RRs para cada uno de los tres nombres de dominio.
+
+De manera similar, se puede ver:
+XX.LCS.MIT.EDU. IN      A       10.0.0.44
+                              CH      A       MIT.EDU. 2420
+
+
+
+3.6.2 Alias y nombres canónicos.
+
+En los sistemas existentes, los hosts y otros recursos a menudo tienen varios nombres para identificar el mismo recurso. Por ejemplo, los nombres C.ISI.EDU y USC-ISIC.ARPA identifican al mismo host. De manera similar, en el caso de las direcciones de correo, muchas organizaciones proporcionan varios nombres que apuntan a la misma dirección de correo. Por ejemplo, Mockapetris@C.ISI.EDU, Mockapetris@B.ISI.EDU y PVM@ISI.EDU apuntan a la misma dirección de correo (aunque el mecanismo detrás de esto puede ser un tanto complicado).
+
+En la mayoría de estos sistemas, se considera que uno de los nombres es el canónico o principal, mientras que los demás son alias.
+
+El sistema de dominios proporciona una característica llamada RR de nombre canónico (CNAME). Un RR CNAME identifica a su nombre propietario como un alias y especifica el nombre canónico correspondiente en la sección RDATA del RR. Si un nodo tiene un RR CNAME, no debería haber más datos presentes, lo cual garantiza que los datos para el nombre canónico y sus alias no sean diferentes. Esta regla también asegura que un CNAME almacenado en caché pueda ser utilizado sin necesidad de ser verificado por un servidor autoritativo para otros tipos de RR.
+
+Los RRs CNAME tienen un comportamiento especial en el software DNS. Cuando un servidor de nombres no encuentra el RR deseado en el conjunto de recursos asociados con el nombre de dominio, verifica si el conjunto de recursos es un registro CNAME con una clase que coincida. Si es así, el servidor de nombres incluye el registro CNAME en la respuesta y reinicia la consulta en el nombre de dominio especificado en el campo de datos del registro CNAME. La única excepción a esta regla es que las consultas que coinciden con el tipo de CNAME no se reiniciarán.
+
+Por ejemplo, supongamos que un servidor de nombres procesa una consulta para USC-ISIC.ARPA, solicitando información del tipo A, y tiene los siguientes registros de recursos:
+USC-ISIC.ARPA   IN      CNAME   C.ISI.EDU
+C.ISI.EDU             IN      A              10.0.0.52
+
+Ambos RRs pueden ser devueltos en la respuesta, mientras que una consulta del tipo CNAME o una consulta "*" puede devolver el CNAME.
+
+Los nombres de dominio en los RRs que apuntan a otro nombre siempre deben apuntar al nombre primario y no a un alias. Esto evita accesos indirectos a la información. Por ejemplo, la dirección para nombrar el RR del ejemplo anterior debería ser:
+52.0.0.10.IN-ADDR.ARPA  IN      PTR     C.ISI.EDU
+
+en lugar de apuntar a USC-ISIC.ARPA. Por el principio de fiabilidad, el software de dominio no debería fallar cuando se presenten cadenas o bucles CNAME; las cadenas CNAME deben ser seguidas y los bucles CNAME se considerarían errores.
+
+3.7 Consultas
+Las consultas son mensajes que se pueden enviar a un servidor de nombres para obtener una respuesta.
+
+En Internet, las consultas se transportan en datagramas UDP o sobre conexiones TCP. La respuesta del servidor de nombres puede ser la respuesta misma a la consulta, referencias a otro conjunto de servidores de nombres o algún error.
+
+Por lo general, el usuario no realiza consultas directamente, las envía al resolutor y este envía una o más consultas a los servidores de nombres. Luego, el resolutor distribuye los errores y las referencias resultantes. Las consultas que se pueden realizar dependen de los tipos de servicios que admita el resolutor.
+
+Las consultas y respuestas tienen un formato de mensaje estándar. El formato del mensaje tiene una cabecera que contiene varios campos ordenados que siempre están presentes y cuatro secciones donde se colocan los parámetros de la consulta y los RRs.
+
+El campo más importante de la cabecera es un campo de cuatro bits llamado opcode, que separa las diferentes consultas. De los 16 valores posibles, uno (consulta estándar) forma parte del protocolo oficial, dos (consulta inversa y estado de la consulta) son opcionales, uno (terminación) no se utiliza y el resto no está asignado.
+
+Las cuatro secciones son:
+
+Pregunta: Contiene el nombre de la consulta y otros parámetros relacionados.
+Respuesta: Contiene los RRs que responden directamente a la consulta.
+Autoridad: Contiene los RRs que describen a otros servidores autoritativos. Puede llevar el RR SOA para los datos autoritativos en la sección de respuesta.
+Adicional: Contiene los RRs que pueden ser útiles para otros RRs de otras secciones.
+
+Es importante destacar que el contenido, no el formato, de estas secciones varía según el opcode de la cabecera.
+
+
+3.7.1 Consultas estándar
+
+Una consulta estándar especifica un nombre de dominio destino (QNAME), un tipo de consulta (QTYPE) y una clase de consulta (QCLASS) y busca los RRs que coincidan. Este tipo de consulta abarca la mayoría de las consultas DNS que utilizan el término "query" y es el estándar a menos que se indique lo contrario. Los campos QTYPE y QCLASS son de 16 bits y son superconjuntos de las clases y tipos definidos.
+
+El campo QTYPE puede contener:
+
+<cualquier tipo>: Coincide con el tipo (A, PTR).
+AXFR: Tipo de consulta especial de transferencia de zona.
+MAILB: Coincide con todas las direcciones de correo de los RRs (MB y MG).
+*: Coincide con todos los tipos de RR.
+
+El campo QCLASS puede contener:
+
+<cualquier clase>: Coincide con la clase (IN, CH).
+*: Coincide con todas las clases de RR.
+
+Utilizando el nombre de dominio de la consulta, QTYPE y QCLASS, el servidor de nombres busca los RRs que coincidan. Además, para los registros relevantes, el servidor de nombres puede devolver RRs que apunten al servidor de nombres que tiene la información deseada o RRs que se esperan que sean útiles para la interpretación de los RRs relevantes. Por ejemplo, un servidor de nombres que no tenga la información requerida puede conocer a un servidor de nombres que sí la tenga; un servidor de nombres que devuelva un nombre de dominio en un RR relevante también puede devolver el RR que vincula el nombre de dominio con una dirección.
+
+Por ejemplo, al enviar un correo electrónico a Mockapetris@ISI.EDU, se puede consultar al resolutor por la información del servidor de correo de ISI.EDU con los siguientes parámetros: QNAME=ISI.EDU, QTYPE=MX, QCLASS=IN. La sección de respuesta puede contener:
+
+ISI.EDU. MX 10 VENERA.ISI.EDU.
+MX 10 VAXA.ISI.EDU.
+
+Mientras que la sección adicional puede ser:
+
+VAXA.ISI.EDU. A 10.2.0.27
+A 128.9.0.33
+VENERA.ISI.EDU. A 10.1.0.52
+A 128.9.0.32
+
+Esto se debe a que el servidor asume que si el origen solicita información del servidor de correo, es probable que también desee las direcciones de los otros servidores de correo.
+
+Es importante destacar que QCLASS=* requiere una interpretación especial en relación con la autoridad. Debido a que un servidor de nombres en particular puede no conocer todas las clases disponibles en el sistema de dominio, es posible que nunca sepa si es autoritativo para todas las clases. Por lo tanto, las respuestas a QCLASS=* nunca son autoritativas.
+
+4. SERVIDORES DE NOMBRES
+
+4.1 Introducción
+
+Los servidores de nombres son los repositorios de información que conforman la base de datos de dominio. Esta base de datos se divide en secciones llamadas zonas, que están distribuidas entre los servidores de nombres. La función principal de un servidor de nombres es responder consultas utilizando los datos de sus zonas. Los servidores de nombres pueden responder consultas de manera simple utilizando datos locales o proporcionando referencias a otros servidores de nombres cercanos que tienen la información deseada.
+
+Para garantizar la disponibilidad de una zona en caso de fallos de comunicación o del servidor, esta puede estar disponible en varios servidores de nombres. Por requisito administrativo, cada zona debe estar disponible en al menos dos servidores, y muchas zonas tienen una mayor redundancia.
+
+Un servidor de nombres generalmente soporta una o más zonas, pero solo tiene información autoritativa sobre una pequeña sección del árbol de dominio. Además, también debe haber datos no autoritativos almacenados en caché en otras partes del árbol. El servidor de nombres marca sus respuestas para que el origen de la consulta pueda saber si provienen de datos autoritativos o no.
+
+4.2 División de la base de datos en zonas
+
+La base de datos se divide en zonas de dos formas: por clases y por "cortes" entre nodos del espacio de nombres.
+
+La partición por clases implica organizar, delegar y mantener la base de datos de cada clase por separado. Los espacios de nombres son los mismos para todas las clases, pero los datos de los nodos pueden ser diferentes. Se crea una nueva clase cuando se necesita un nuevo formato de datos para tipos existentes o se desea tener un manejo separado de otra versión del espacio de nombres existente.
+
+En una clase, se puede realizar un "corte" en el espacio de nombres entre dos nodos adyacentes, lo que resulta en grupos de espacios de nombres conectados que forman zonas separadas. Cada zona es autoritativa para los nombres en su región de conexión. El corte en el espacio de nombres puede variar para diferentes clases, y los servidores de nombres pueden ser diferentes en cada zona.
+
+Cada zona tiene al menos un nodo para el cual es autoritativa, y todos los nodos en una zona están conectados. Cada zona tiene un nodo superior cerca de la raíz que identifica la zona.
+
+La partición del espacio de nombres se realiza en puntos donde una organización desea tener control sobre un subárbol. Una vez que una organización controla su propia zona, puede cambiar los datos de la zona, crear nuevas secciones en el árbol, borrar nodos o delegar nuevas subzonas bajo su zona.
+
+Si una organización tiene una estructura jerárquica, puede realizar delegaciones anidadas para controlar el espacio de nombres. Estas divisiones se realizan en algunos casos para mantener adecuadamente la base de datos.
+
+4.2.1. Consideraciones técnicas
+
+Los datos que describen una zona se dividen en cuatro partes principales:
+
+- Datos autoritativos para todos los nodos dentro de la zona.
+- Datos que definen el nodo superior de la zona (considerados parte de los datos autoritativos).
+- Datos que describen subzonas delegadas (cortes en el límite de la zona).
+- Datos que permiten el acceso a subzonas a través de servidores de nombres (a veces llamados datos "glue" o pegamento).
+
+Estos datos se expresan como Registros de Recursos (RRs), lo que significa que una zona puede describirse completamente mediante un conjunto de RRs. Las zonas pueden transferirse entre servidores de nombres transfiriendo los RRs, transportarse en series de mensajes o subirse mediante FTP en forma de archivo maestro en formato de texto.
+
+Los datos autoritativos de una zona incluyen todos los RRs asociados a los nodos desde el nodo superior de la zona hasta los nodos hojas o nodos de límite de la zona.
+
+Los RRs que describen el nodo superior de la zona son de dos tipos: RRs del servidor de nombres que enumeran todos los servidores para la zona y un solo RR SOA que describe los parámetros de gestión de la zona.
+
+Los RRs que describen el límite final de la zona son RRs NS que nombran a los servidores de las subzonas. Estos RRs NS no forman parte de los datos autoritativos de la zona, ya que los cortes están entre nodos. Los RRs NS deben ser idénticos a los correspondientes RRs en el nodo superior de la subzona. Los RRs NS solo se encuentran en nodos que están en el nodo superior de alguna zona.
+
+Una meta de la estructura de la zona es que cualquier zona tenga los datos necesarios para comunicarse con los servidores de nombres de las subzonas. Las zonas padres deben tener toda la información requerida para acceder a los servidores de las subzonas. Los RRs NS que nombran a los servidores de las subzonas a menudo no son suficientes porque no proporcionan las direcciones de los servidores. Para solucionar este problema, las zonas contienen RRs "glue" que no son datos autoritativos, sino RRs que contienen las direcciones de los servidores. Estos RRs son necesarios cuando el nombre del servidor de nombres está detrás del límite de la zona y se utilizan como parte de la referencia en la respuesta.
+
+
+4.2.2. Consideraciones administrativas
+
+Cuando alguna organización quiere el control de su propio dominio, el primer paso es identificar a la zona padre apropiada, y conseguir que los propietarios de la zona padre nos den la delegación del control.
+
+4.3 Los servidores por dentro
+
+4.3.1 Consultas y respuestas
+
+4.3.1. Consultas y respuestas
+
+La actividad principal de los servidores de nombres es responder consultas estándar, que siguen un formato de mensaje descrito en el RFC-1035. Una consulta consta de un tipo de consulta (QTYPE), una clase de consulta (QCLASS) y un nombre de consulta (QNAME), que especifica el tipo de información deseada y el nombre en cuestión.
+
+La forma en que un servidor de nombres responde depende de si opera en modo recursivo o no:
+
+- En el modo no recursivo, el servidor responde consultas utilizando solo la información local. La respuesta puede contener un error, la respuesta en sí o una referencia a otro servidor cercano. Todos los servidores de nombres deben implementar consultas no recursivas.
+
+- En el modo recursivo, el servidor de nombres actúa como un resolutor y devuelve una respuesta o un error, pero nunca una referencia a otro servidor. Este servicio es opcional y el servidor puede restringir su uso a clientes específicos.
+
+El modo recursivo es útil en diversas situaciones, como cuando un cliente solo puede manejar una respuesta directa a la consulta, cuando necesita pasar de un protocolo a otro o cuando se desea centralizar la caché en lugar de tener una caché separada para cada cliente.
+
+El uso del modo recursivo está limitado a los casos en los que tanto el cliente como el servidor de nombres están de acuerdo en utilizarlo. Este acuerdo se negocia mediante el uso de dos bits en los mensajes de consulta y respuesta:
+
+- El bit de Recursión Disponible (RA) indica si el servidor de nombres está dispuesto a ofrecer un servicio recursivo al cliente, independientemente de si el cliente desea un servicio recursivo o no para sus consultas.
+
+- El bit de Deseo de Recursión (RD) especifica si el cliente desea el servicio de recursión para esa consulta. Los clientes pueden solicitar el servicio de recursión a cualquier servidor de nombres si este ha indicado previamente disponibilidad (RA) o si existe un acuerdo privado o una forma fuera del protocolo DNS para ofrecer el servicio.
+
+El modo recursivo se activa cuando una consulta con el bit RD llega al servidor que está dispuesto a ofrecer el servicio recursivo. El cliente puede verificar la disponibilidad del modo recursivo comprobando si los bits RA y RD están presentes en la respuesta. Es importante destacar que el servidor de nombres no puede proporcionar el servicio recursivo a menos que se le envíe un bit RD, ya que esto podría causar problemas en el servidor y en sus bases de datos.
+
+Si se solicita y está disponible el servicio de recursión, la respuesta a una consulta recursiva puede ser:
+
+- La respuesta a la consulta, que puede ir precedida de uno o más RRs CNAME que especifican los alias encontrados para la respuesta.
+
+- Un error de nombre indicando que el nombre no existe. Esto puede incluir RRs CNAME que indican que el nombre de la consulta original era un alias para un nombre inexistente.
+
+- Una indicación de error temporal.
+
+Si no se solicita el servicio de recursión o no está disponible, la respuesta no recursiva puede ser:
+
+- Un error autoritativo indicando que el nombre no existe.
+
+- Una indicación de error temporal.
+
+- Una combinación de RRs que responden a la consulta, junto con una indicación de si los datos provienen de una zona o están en caché.
+
+- Una referencia a servidores de nombres que tienen zonas que son antecesoras cercanas al nombre
+
+ buscado.
+
+- RRs que el servidor de nombres considera útiles para el origen.
+
+
+4.3.2. Algoritmo
+
+El algoritmo utilizado por el servidor de nombres varía según el sistema operativo y las estructuras de datos utilizadas para almacenar los RRs (Registros de Recursos). A continuación se presenta un resumen del algoritmo, considerando que los RRs están organizados en estructuras de árbol separadas para cada zona y para la caché:
+
+1. Establecer el valor de recursión disponible en la respuesta según si el servidor de nombres ofrecerá el servicio de recursividad. Si el servicio de recursividad está disponible y se solicita mediante el bit RD en la consulta, continuar en el paso 5; de lo contrario, continuar en el paso 2.
+
+2. Buscar la zona más cercana al antecesor del QNAME entre las zonas disponibles. Si se encuentra dicha zona, continuar en el paso 3; de lo contrario, continuar en el paso 4.
+
+3. Comparar etiqueta por etiqueta en la zona encontrada. El proceso de comparación puede finalizar de las siguientes formas:
+
+   a. Si se encuentra una coincidencia con el QNAME completo, se ha encontrado el nodo. Si los datos del nodo son un RR CNAME y el QTYPE no coincide con CNAME, copiar el RR CNAME en la sección de respuesta, cambiar el QNAME al nombre canónico del RR CNAME y volver al paso 1. En cualquier otro caso, copiar todos los RRs que coincidan con el QTYPE en la sección de respuesta y continuar en el paso 6.
+
+   b. Si una coincidencia lleva fuera de los datos autoritativos, se tiene una referencia. Esto ocurre cuando se encuentra un nodo con RRs NS que indican divisiones en la parte inferior de una zona. Copiar los RRs NS de la subzona en la sección autoritativa de la respuesta. Agregar las direcciones disponibles en la sección adicional utilizando RRs glue si las direcciones no están disponibles en los datos autoritativos o en la caché. Continuar en el paso 4.
+
+   c. Si no hay coincidencia con alguna etiqueta (la etiqueta correspondiente no existe), verificar si la etiqueta "*" existe. Si la etiqueta "*" no existe, verificar si el nombre buscado es el QNAME original de la consulta o un nombre seguido a través de un CNAME. Si el nombre es el original, establecer un error autoritativo de nombre en la respuesta y salir. En cualquier otro caso, salir. Si la etiqueta "*" existe, comparar los RRs de este nodo con el QTYPE. Si hay alguna coincidencia, copiar los RRs en la sección de respuesta pero estableciendo a QNAME como propietario del RR en lugar del nodo con la etiqueta "*". Continuar en el paso 6.
+
+4. Comenzar la comparación en la caché. Si se encuentra el QNAME en la caché, copiar todos los RRs asociados donde coincida el QTYPE en la sección de respuesta. Si no hubo delegación de datos autoritativos, buscar el mejor resultado en la caché y colocarlo en la sección autoritativa. Continuar en el paso 6.
+
+5. Utilizar el resolutor local o una copia de su algoritmo para responder la consulta. Guardar los resultados, incluyendo cualquier CNAME intermedio, en la sección de respuesta de la respuesta.
+
+6. Utilizando solo datos locales, intentar agregar otros RRs que puedan ser útiles a la sección adicional de la respuesta. Salir.
+
+
+4.3.3. Wildcards
+
+En el sistema de nombres de dominio (DNS), los RRs (Registros de Recursos) con nombres de propietario que comienzan con la etiqueta "*" se denominan wildcards. Estos RRs wildcard se utilizan para sintetizar otros RRs. Cuando se cumplen ciertas condiciones, el servidor de nombres crea RRs con un nombre de propietario igual al de la consulta y toma los contenidos de los RRs wildcard.
+
+Los RRs wildcard se utilizan para crear zonas que redirigen correos electrónicos desde Internet hacia otros sistemas de correo. La idea es asumir que cualquier nombre presentado al servidor en una consulta pertenece a la zona correspondiente, cumpliendo ciertas propiedades, a menos que haya una evidencia explícita que lo contradiga. Es importante tener en cuenta que el término "zona" se utiliza en lugar de "dominio" de manera intencional, ya que por defecto no se propaga más allá de los límites de la zona, aunque una subzona puede parecer un dominio debido a la configuración por defecto.
+
+Los RRs wildcard siguen las reglas y formatos habituales de los RRs. En la zona, los wildcards tienen un nombre de propietario que controla las consultas que coinciden con determinados nombres. El nombre de propietario de los RRs wildcard tiene el formato "*.<cualquierdominio>", donde <cualquierdominio> puede ser cualquier nombre de dominio. Sin embargo, <cualquierdominio> no debe contener otras etiquetas "*" y debe ser autoritativo para la zona. Los wildcards se aplican potencialmente a los descendientes de <cualquierdominio>, pero no a <cualquierdominio> en sí mismo.
+
+Otra forma de entender esto es que la etiqueta "*" siempre coincide al menos con una etiqueta completa y, a veces, con varias etiquetas completas.
+
+Hay situaciones en las que los RRs wildcard no funcionan:
+
+- Cuando la consulta se encuentra en otra zona. En este caso, la delegación cancela el funcionamiento por defecto del wildcard.
+
+- Cuando se sabe que el nombre de la consulta o un nombre entre el dominio del wildcard y el nombre de la consulta existe. Por ejemplo, si un RR wildcard tiene como nombre de propietario "*.X" y la zona también tiene RRs para B.X, los wildcards pueden aplicarse a consultas para el nombre Z.X (sabiendo que no hay información explícita para Z.X), pero no para B.X, A.B.X o X.
+
+La etiqueta "* A" no tiene un efecto especial si aparece en un nombre de consulta, pero se puede utilizar para verificar wildcards en una zona autoritativa. Una consulta de ese tipo es la única forma de obtener una respuesta que contenga RRs con un nombre de propietario que contenga "*". El resultado de dicha consulta no se almacenará en caché.
+
+Es importante destacar que los contenidos de los RRs wildcard no se modifican al utilizarlos para sintetizar otros RRs.
+
+A modo de ejemplo, supongamos una empresa grande con una extensa red que desea crear una puerta de enlace de correo electrónico. Si la empresa se llama X.COM y tiene una máquina para la puerta de enlace TCP/IP llamada A.X.COM, los siguientes RRs deberían estar en la zona COM:
+
+X.COM           MX      10      A.X.COM
+*.X.COM         MX      10      A.X.COM
+A.X.COM         A       1.2.3.4
+A.X.COM         MX      10      A.X.COM
+*.A.X.COM       MX      10      A.X.COM
+
+Esto devuelve un RR MX de A.X.COM para cualquier consulta MX con un nombre de dominio que termine en X.COM. Se necesitan dos RRs wildcard debido a que el efecto del wildcard en *.X.COM está implícito en el subárbol A.X.COM debido a los datos explícitos de A.X.COM. También se requieren los datos MX explícitos de X.COM y A.X.COM, y uno de estos RRs debe coincidir con el nombre de la consulta de XX.COM.
+
+
+4.3.5. Mantenimiento y transferencias de zona
+
+El mantenimiento de las zonas en los servidores de nombres autoritativos es una tarea importante del administrador de zona. Cuando se realizan cambios en una zona, es necesario distribuir esos cambios a todos los servidores de nombres. Esto puede hacerse a través de FTP u otros métodos, pero la forma preferida es mediante la transferencia de zona, que es parte del protocolo DNS.
+
+El proceso general de transferencia automática de zona ocurre en los servidores de nombres maestros o primarios de la zona. Los cambios se coordinan en el servidor primario, generalmente mediante la edición del archivo maestro de la zona. Después de la edición, el administrador indica al servidor maestro que cargue la nueva zona. Los otros servidores no maestros o secundarios de la zona, periódicamente verifican los cambios (en un intervalo seleccionable) y obtienen las copias actualizadas de la zona cuando se han realizado los cambios.
+
+Para detectar los cambios, los servidores secundarios verifican el campo SERIAL del SOA (Start of Authority) de la zona. Además, el campo SERIAL del SOA de la zona siempre se incrementa cada vez que se produce algún cambio en la zona. El avance puede ser un incremento simple o basarse en la fecha y hora del archivo maestro, entre otros. El propósito es permitir la determinación de cuál de las dos copias de una zona es más reciente al comparar sus números de serie. Los números de serie utilizan una secuencia aritmética y, por lo tanto, existe un límite teórico en la rapidez de actualización de una zona. Básicamente, las copias antiguas se descartan antes de que el número de serie alcance la mitad de su rango de 32 bits. En la práctica, la comparación funciona correctamente si se realiza dentro de los límites del número más positivo y más negativo de los 32 bits.
+
+La verificación periódica de los servidores secundarios se controla mediante los parámetros del RR SOA de la zona, que establecen el intervalo mínimo aceptable para la verificación. Estos parámetros se denominan REFRESH, RETRY y EXPIRE. Incluso cuando se carga una nueva zona secundaria, esta espera el tiempo de refresco (REFRESH) antes de verificar un nuevo número de serie en el servidor primario. Si esta verificación no se completa, se intenta nuevamente cada ciertos segundos (RETRY). La verificación consiste en una simple consulta al RR SOA del servidor primario. Si el campo del número de serie en el servidor secundario es igual al número de serie devuelto por el servidor primario, significa que no ha habido cambios, y se espera a reiniciar el intervalo de refresco. Si el servidor secundario no puede verificar el número de serie dentro del intervalo de expiración (EXPIRE), asume que su copia de la zona está obsoleta y la descarta.
+
+Cuando se detecta un cambio en la zona, el servidor secundario solicita una transferencia de zona mediante una solicitud AXFR. Esta solicitud puede resultar en un error, como un rechazo, pero normalmente se responde con una secuencia de mensajes de respuesta.
+
+El primer y último mensaje de la secuencia contienen los datos del nodo más alto autoritativo de la zona, mientras que los mensajes intermedios llevan el resto
+
+ de los registros (RRs) de la zona, tanto autoritativos como no autoritativos. El flujo de mensajes permite que el servidor secundario reconstruya una copia completa de la zona. Dado que la precisión es esencial, se recomienda utilizar TCP u otro protocolo confiable para las solicitudes AXFR.
+
+Cada servidor secundario puede realizar estas operaciones contra un servidor maestro, pero también puede realizarlas contra otros servidores secundarios. Esta estrategia puede mejorar el proceso de transferencia cuando el servidor maestro no está disponible debido a una caída o problemas de red, o cuando un servidor secundario tiene un mejor acceso de red a otro servidor secundario "intermedio" que al servidor maestro.
+
+
+5. RESOLUTORES
+
+5.1. Introducción
+
+Los resolutores son programas que actúan como intermediarios entre los programas de usuario y los servidores de nombres de dominio. Su función principal es recibir solicitudes de programas de usuario (como correo electrónico, TELNET, FTP, etc.) a través de llamadas de subrutinas o del sistema y devolver la información solicitada en formatos compatibles con el sistema local.
+
+Los resolutores residen en la misma máquina que el programa que realiza las consultas, pero necesitan consultar servidores de nombres en otros hosts. El tiempo necesario para que un resolutor complete su tarea puede variar según si los datos están en su caché local o si necesita obtenerlos de varios servidores. Este tiempo puede oscilar entre milisegundos y segundos.
+
+Un objetivo importante de un resolutor es reducir la carga en los servidores de nombres y minimizar el retardo de red al responder la mayoría de las solicitudes desde su propia caché, utilizando resultados previos. Esto implica que las cachés compartidas por múltiples procesos, usuarios y máquinas son más eficientes que las cachés no compartidas.
+
+
+5.2. Intérprete Cliente-resolutor
+
+5.2.1. Funciones típicas
+
+El intérprete cliente del resolutor tiene influencias de las convenciones del host local, pero generalmente se encarga de tres funciones:
+
+1. Conversión de nombres de host a direcciones de host:
+   Esta función busca convertir una cadena de caracteres que representa un nombre de host en una o más direcciones IP de 32 bits. El DNS realiza una solicitud de registros (RR) de tipo A para obtener las direcciones correspondientes. El intérprete puede ordenar las direcciones devueltas o seleccionar las mejores opciones para el cliente. Aunque se recomienda devolver varias direcciones, en algunos casos puede ser necesario devolver solo una dirección para emular el comportamiento del antiguo archivo HOSTS.TXT.
+
+2. Conversión de direcciones a nombres de host:
+   En esta función, se toma una dirección IP de 32 bits y se busca obtener una cadena de caracteres que represente el nombre de host correspondiente. Se utiliza una consulta de tipo PTR que busca el RR con el nombre primario del host. Por ejemplo, una solicitud para obtener el nombre de host que corresponde a la dirección IP 1.2.3.4 buscará RRs PTR para el nombre de dominio "4.3.2.1.IN-ADDR.ARPA".
+
+3. Función de búsqueda general:
+   Esta función permite recuperar información arbitraria del DNS y no está presente en sistemas anteriores. El cliente proporciona un QNAME, QTYPE y QCLASS, y desea obtener todos los RRs que coincidan con esos parámetros. Esta función utiliza el formato DNS en lugar del formato del host local para los datos de los RR y devuelve todos los contenidos del RR (como el TTL) en lugar de procesarlos según las convenciones locales.
+
+Cuando el resolutor realiza una de estas funciones, normalmente devuelve uno de los siguientes resultados al cliente:
+
+- Uno o más RRs con los datos solicitados, devolviendo la respuesta en el formato adecuado.
+- Un error de nombre (NE), que ocurre cuando el nombre referenciado no existe.
+- Un error de dato no encontrado, que sucede cuando el nombre referenciado existe, pero no existen datos del tipo apropiado.
+
+Es importante tener en cuenta que las funciones de conversión entre nombres de host y direcciones pueden combinar las condiciones de error "error de nombre" y "dato no encontrado" en un solo tipo de error de retorno, pero la función de búsqueda general no lo hace. Esto se debe a que las aplicaciones pueden realizar consultas separadas para diferentes tipos de información sobre un nombre, y combinar los errores podría ralentizar la aplicación si una de las consultas no es relevante.
+
+
+5.2.2 Alias
+
+Cuando el resolutor encuentra un RR CNAME al intentar resolver una consulta, puede determinar que el nombre en cuestión es un alias. En estos casos, el resolutor debe comunicar esta información al cliente siempre que sea posible.
+
+En la mayoría de los casos, cuando se encuentra un CNAME, el resolutor reinicia la consulta utilizando el nuevo nombre. Sin embargo, al realizar la función de búsqueda general, el resolutor puede optar por no seguir los alias si el RR CNAME coincide con el tipo de consulta. Esto permite realizar consultas que dependan de la presencia o ausencia de un alias en la pregunta. Por ejemplo, si el tipo de consulta es CNAME, el cliente está interesado específicamente en el RR CNAME en sí y no en los RRs de los nombres a los que apunta.
+
+Existen algunas condiciones especiales relacionadas con los alias. No se considera un error, pero se recomienda evitar el uso excesivo de niveles múltiples de alias debido a su ineficiencia. Además, se deben detectar y manejar los bucles de alias que apuntan a nombres que no existen, emitiendo un error al cliente en tales casos.
+
+
+5.2.3. Fallos temporales
+
+En ocasiones, los resolutores pueden no resolver una consulta específica debido a diversas circunstancias temporales. Estas condiciones pueden ser causadas por la caída de un resolutor en la red debido a problemas de conexión o fallas en la puerta de enlace, o en casos menos frecuentes, por la falla o indisponibilidad de todos los servidores de un dominio en particular.
+
+Es fundamental que este tipo de situaciones no se presenten como errores de nombre o falta de datos en las aplicaciones. Estos problemas pueden resultar molestos para los usuarios y generar confusión cuando se utiliza DNS en sistemas de correo.
+
+En algunos casos, es posible que se produzcan bloqueos temporales que mantengan las consultas en espera de manera indefinida, pero generalmente esta no es una buena opción, especialmente cuando el cliente es un proceso de servidor que puede cambiar a otras tareas. La solución recomendada es considerar siempre el fallo temporal como uno de los posibles resultados de la función del resolutor, incluso cuando se intente emular un HOSTS.TXT existente.
+
+
+5.3. El resolutor por dentro
+
+Cada implementación de resolutor utiliza algoritmos muy parecidos, y normalmente consume mucho más en indicar errores lógicos de varios tipos que en el funcionamiento normal. Esta sección resume una estrategia básica recomendada para la operación del resolutor, dejando más detalles en el [RFC-1035].
+
+5.3.1. Resolutores incompletos
+
+Una opción para implementar un resolutor es trasladar la función de resolución desde una máquina local a un servidor de nombres que admita consultas recursivas. Esto es una forma sencilla de proporcionar servicios de dominio en una PC al liberarla de la tarea de resolución, o para centralizar la caché en toda la red u organización.
+
+Solo se necesita una lista de direcciones de servidores de nombres que realicen consultas recursivas. Este tipo de resolutor probablemente requerirá información en un archivo de configuración y puede carecer de la sofisticación necesaria para localizarlo en la base de datos del dominio. Además, el usuario debe verificar que los servidores mencionados estén dispuestos a proporcionar el servicio recursivo, ya que un servidor de nombres puede rechazar brindar este servicio a cualquier cliente o a todos ellos. El usuario puede consultar al administrador del sistema local para obtener información sobre los servidores de nombres que pueden ofrecer el servicio.
+
+Sin embargo, este tipo de servicio tiene algunas desventajas. Debido a que la consulta recursiva puede llevar tiempo indeterminado, puede resultar difícil optimizar los intervalos de retransmisión en caso de cambios en la zona, ya que se debe lidiar con paquetes UDP perdidos y servidores inactivos. Si se interpretan las retransmisiones como consultas nuevas, el servidor de nombres puede sobrecargarse fácilmente con verificaciones de cambio de zona. Una posible solución es utilizar TCP, pero esto puede reducir la capacidad del host de manera similar a un resolutor real.
+
+
+5.3.2. Recursos
+
+Además de sus propios recursos, el resolutor también puede tener acceso compartido a zonas mantenidas por el servidor de nombres local. Esto le brinda al resolutor la ventaja de un acceso más rápido, pero debe tener cuidado para evitar que la información en caché reemplace los datos de la zona. En este contexto, el término "información local" se refiere a la combinación de la caché y las zonas compartidas, y se entiende que los datos autorizados siempre tienen prioridad sobre los datos en caché cuando ambos están presentes.
+
+El algoritmo del resolutor asume que todas las funciones se han convertido en una función de búsqueda general y utiliza las siguientes estructuras de datos para representar el estado en progreso de una consulta en el resolutor:
+
+- SNAME: el nombre de dominio que se está buscando.
+- STYPE: el QTYPE de la consulta.
+- SCLASS: el QCLASS de la consulta.
+- SLIST: una estructura que describe los servidores de nombres y la zona a la que el resolutor envía la consulta. Esta estructura mantiene un registro de las mejores búsquedas y los servidores de nombres involucrados, y se actualiza cuando se producen cambios. Incluye el nombre de zona equivalente, los servidores de nombres de la zona, las direcciones de los servidores de nombres y un historial con información sobre el mejor servidor de nombres para la siguiente búsqueda. El nombre de zona equivalente es aquel que coincide con las etiquetas desde la raíz y cuyo SNAME es el mismo que el de la zona consultada, y se utiliza para "conectar" el SNAME con el resolutor.
+- SBELT: una estructura de "cinturón de seguridad" que se inicializa desde un archivo de configuración y especifica los servidores que deben utilizarse cuando el resolutor no tiene información local para seleccionar un servidor de nombres. El valor -1 indica que no hay ninguna etiqueta que coincida.
+- CACHE: una estructura que almacena los resultados de las consultas realizadas. Dado que los resolutores son responsables de eliminar los RRs antiguos cuyo TTL ha expirado, la mayoría de las implementaciones convierten el intervalo especificado en los RRs recibidos en un tiempo absoluto cuando se guardan en caché. En lugar de contar individualmente los TTL, el resolutor ignora o descarta los RRs antiguos durante el transcurso de una búsqueda o durante la limpieza periódica de la memoria ocupada por los RRs antiguos.
+
+
+5.3.3. Algoritmo
+
+El nivel superior del algoritmo consta de cuatro pasos:
+
+1. Verificar si la respuesta proviene de la información local y si se ha devuelto al cliente.
+2. Encontrar los mejores servidores a los cuales hacer preguntas.
+3. Enviar las consultas a los servidores hasta que uno responda.
+4. Analizar la respuesta, considerando las siguientes opciones:
+
+   a. Si la respuesta responde a la pregunta o contiene un error de nombre, cachear los datos y devolverlos al cliente.
+   b. Si la respuesta contiene una mejor delegación a otros servidores, cachear la información de delegación y volver al paso 2.
+   c. Si la respuesta contiene un CNAME y no es la respuesta en sí, cachear el CNAME, cambiar el SNAME por el nombre canónico del RR CNAME y volver al paso 1.
+   d. Si la respuesta contiene un fallo de servidor u otro contenido extraño, eliminar el servidor de SLIST y volver al paso 3.
+
+En el paso 1, se busca en la caché los datos deseados. Si los datos están en la caché, se asume que son suficientes en condiciones normales. Algunos resolutores permiten al cliente ignorar la caché y consultar un servidor autoritativo, pero esto no se recomienda por defecto. Si el resolutor tiene acceso directo a zonas de servidores de nombres, debe verificar si los datos deseados están presentes de forma autoritativa y utilizarlos en lugar de los datos en caché.
+
+En el paso 2, se busca un servidor de nombres para realizar las consultas requeridas. La estrategia general es buscar los RRs de servidores de nombres que estén disponibles localmente, comenzando con SNAME y luego con el nombre de dominio padre, el abuelo, y así sucesivamente hasta llegar a la raíz. Por ejemplo, si SNAME es Mockapetris.ISI.EDU, se buscarán los RRs NS de Mockapetris.ISI.EDU, luego ISI.EDU, luego EDU y finalmente la raíz (.). Estos RRs NS enumeran los nombres de los hosts para una zona que incluya o sea superior a SNAME, se copian los nombres en SLIST y se guardan sus direcciones como datos locales. Si el resolutor encuentra que las direcciones no están disponibles, tiene varias opciones, siendo la mejor comenzar procesos paralelos de resolución para obtener las direcciones mientras se continúa con las disponibles. El diseño de estas opciones puede ser complicado y supone carga para el host local. Las prioridades recomendadas para el diseño del resolutor son: limitar el total de trabajo para evitar bucles infinitos o reacciones en cadena, responder si es posible, evitar transmisiones innecesarias y obtener la respuesta lo antes posible.
+
+Si la búsqueda de los RRs NS falla, el resolutor inicializará SLIST desde el cinturón de seguridad SBELT. La idea básica es que cuando el resolutor no tenga idea de a qué servidor preguntar, utilice la información de un archivo de configuración que contenga varios servidores útiles. Lo habitual es incluir dos servidores raíz y dos servidores del dominio del host en el archivo de configuración, con el objetivo de redundancia. Los servidores raíz permiten el acceso a todo el espacio de dominio, mientras que los servidores locales permiten al resolutor continuar resolviendo nombres localmente en caso de aislamiento de la red local de Internet.
+
+Además de los nombres y direcciones de los servidores, la estructura de datos SLIST puede ordenarse para priorizar los mejores servidores y garantizar que todas las direcciones de todos los servidores se utilicen de forma equitativa (round-robin). La ordenación puede basarse en preferencias de direcciones de la red local u otras estadísticas, como tiempos de respuesta pasados.
+
+En el paso 3, se envían las consultas a los servidores hasta recibir una respuesta. La estrategia consiste en realizar consultas cíclicas a todas las direcciones de todos los servidores, con un tiempo determinado entre cada transmisión. Es importante utilizar todas las direcciones de un host con varias tarjetas de red, y una política de retransmisión más agresiva podría ralentizar las respuestas cuando se utilizan múltiples resolutores para el mismo servidor de nombres. SLIST normalmente contiene valores de datos que controlan los tiempos de expiración y registra las transmisiones realizadas.
+
+En el paso 4, se realiza el análisis de las respuestas. El resolutor debe ser cuidadoso en este análisis y verificar que la respuesta coincida con la consulta enviada utilizando el campo ID de la respuesta.
+
+La respuesta ideal proviene de un servidor autoritativo que proporciona los datos requeridos o un error de nombre. Estos datos se entregan al usuario y se almacenan en la caché para futuros usos si su TTL es mayor que 0.
+
+Si la respuesta muestra una delegación, el resolutor verifica si la delegación está "cerca" de la respuesta en función de los servidores en SLIST. Esto se puede hacer comparando las coincidencias en SLIST con las encontradas en SNAME y los RRs NS de la delegación. Si la delegación es válida, se cachéan los RRs NS de la delegación y cualquier RRs con direcciones de servidores. Los servidores de nombres se agregan a SLIST y se reinicia la búsqueda.
+
+Si la respuesta contiene un CNAME, se reinicia la búsqueda utilizando el CNAME a menos que la respuesta contenga los datos del nombre canónico o el CNAME sea la respuesta en sí.
+
+Los detalles y trucos de implementación se encuentran en el [RFC-1035].
+
+
+6. UN ESCENARIO
+
+6. UN ESCENARIO
+
+En este escenario de ejemplo, se desea separar el control administrativo para varias zonas dentro de nuestro espacio de dominio. La ubicación de los servidores de nombres es la siguiente:
+
+
+
+En este ejemplo, los servidores de nombres autoritativos se muestran entre paréntesis en el árbol del dominio donde asumen el control.
+
+Además, los servidores de nombres raíz se encuentran en C.ISI.EDU, SRI-NIC.ARPA y A.ISI.EDU. El dominio MIL es hijo de SRI-NIC.ARPA y A.ISI.EDU. El dominio EDU es hijo de SRI-NIC.ARPA y C.ISI.EDU. Es importante destacar que los servidores pueden tener zonas contiguas o no contiguas. En este escenario, C.ISI.EDU tiene zonas contiguas en los dominios raíz y EDU. A.ISI.EDU tiene zonas contiguas en los dominios raíz y MIL, pero también tiene una zona no contigua en ISI.EDU.
+
+
+6.1. El servidor de nombres C.ISI.EDU
+
+C.ISI.EDU es un servidor de nombres para los dominios raíz, MIL y EDU de la clase IN, y puede tener zonas para esos dominios. Los datos de la zona para el dominio raíz son los siguientes:
+
+- El RR SOA describe la zona raíz y los tres RRs NS enumeran los servidores de nombres para la zona raíz.
+- Los datos del RR SOA describen el mantenimiento de la zona, con un TTL mínimo de 86400 segundos.
+- Los RRs NS para los dominios MIL y EDU marcan los límites entre la zona raíz y las zonas MIL y EDU.
+
+El fichero maestro para la zona EDU debe ser relativo al origen EDU. Los datos de la zona del dominio EDU son los siguientes:
+
+- Los RRs NS marcan los límites entre la zona EDU y las subzonas UCI, ICS.UCI, ROME.UCI, ISI, UDEL.EDU, YALE.EDU y MIT.EDU.
+- Los RRs A asignan direcciones IP a los servidores de nombres y los RRs CNAME establecen alias para C.ISI.EDU.
+
+Nótese que se utilizan nombres relativos y absolutos en el archivo maestro para representar los datos de la zona.
+
+
+
+6.2. Ejemplo de consultas estándar
+
+Las siguientes consultas y respuestas muestran el funcionamiento del servidor de nombres. A menos que se especifique lo contrario, las consultas no tienen el requerimiento de recursión (RD) en la cabecera. Nótese que las respuestas a consultas no recursivas se realizan dependiendo del servidor preguntado, y no dependen del origen de la consulta.
+
+6.2.1. QNAME=SRI-NIC.ARPA, QTYPE=A
+
+La consulta puede ser así:
+            +---------------------------------------------------+
+       Header     | OPCODE=SQUERY                     |
+                  +---------------------------------------------------+
+       Question   | QNAME=SRI-NIC.ARPA., QCLASS=IN, QTYPE=A|
+                 +---------------------------------------------------+
+       Answer     | <empty>                                           |
+                  +---------------------------------------------------+
+       Authority  | <empty>                                           |
+                  +---------------------------------------------------+
+       Additional | <empty>                                           |
+                  +---------------------------------------------------+
+
+La respuesta desde C.ISI.EDU puede ser:
+
+  +---------------------------------------------------+
+       Header     | OPCODE=SQUERY, RESPONSE, AA|
+                  +---------------------------------------------------+
+       Question   | QNAME=SRI-NIC.ARPA., QCLASS=IN, QTYPE=A|
+                  +---------------------------------------------------+
+       Answer     | SRI-NIC.ARPA. 86400 IN A 26.0.0.73|
+                  |               86400 IN A 10.0.0.51                |
+                  +---------------------------------------------------+
+       Authority  | <empty>                                           |
+                  +---------------------------------------------------+
+       Additional | <empty>                                           |
+                  +---------------------------------------------------+
+
+
+
+La cabecera de la respuesta indica que es una respuesta (RESPONSE) y que los RRs en la sección de respuesta (Answer) son autoritativos (AA). La sección de consulta (Question) es igual a la consulta original.
+
+Si se envía la misma consulta a otro servidor que no es autoritativo para SRI-NIC.ARPA, la respuesta puede ser la siguiente:
+
+                 +---------------------------------------------------+
+       Header     | OPCODE=SQUERY,RESPONSE                            |
+                  +---------------------------------------------------+
+       Question   | QNAME=SRI-NIC.ARPA., QCLASS=IN, QTYPE=A           |
+                  +---------------------------------------------------+
+       Answer     | SRI-NIC.ARPA. 1777 IN A 10.0.0.51                 |
+                  |               1777 IN A 26.0.0.73                 |
+                  +---------------------------------------------------+
+       Authority  | <empty>                                           |
+                  +---------------------------------------------------+
+       Additional | <empty>                                           |
+                  +---------------------------------------------------+
+
+Esta respuesta es diferente en dos aspectos: la cabecera no tiene el bit AA y los TTLs son diferentes. Esto se debe a que los datos no provienen de una zona autoritativa, sino de una caché. La diferencia en el orden de los RRs no es significativa.
+ 
+6.2.2. QNAME=SRI-NIC.ARPA, QTYPE=*
+
+Una consulta similar a la anterior, pero utilizando un QTYPE de *, puede recibir la siguiente respuesta desde C.ISI.EDU:
+
+                 +---------------------------------------------------+
+       Header     | OPCODE=SQUERY, RESPONSE, AA|
+                  +---------------------------------------------------+
+       Question   | QNAME=SRI-NIC.ARPA., QCLASS=IN, QTYPE=*|
+                  +---------------------------------------------------+
+       Answer     | SRI-NIC.ARPA. 86400 IN  A     26.0.0.73|
+                  |                                                  A     10.0.0.51|
+                  |                                                 MX    0 SRI-NIC.ARPA.|
+                  |                                                  HINFO DEC-2060 TOPS20 |
+                  +---------------------------------------------------+
+       Authority  | <empty>                                           |
+                  +---------------------------------------------------+
+       Additional | <empty>                                           |
+                  +---------------------------------------------------+
+
+Si se dirigiera una consulta similar a dos servidores de nombres que no son autoritativos para SRI-NIC.ARPA, las respuestas pueden ser las siguientes:
+
+Respuesta 1:
+
+                 +---------------------------------------------------+
+       Header     | OPCODE=SQUERY, RESPONSE|
+                  +---------------------------------------------------+
+       Question   | QNAME=SRI-NIC.ARPA., QCLASS=IN, QTYPE=*|
+                  +---------------------------------------------------+
+       Answer     | SRI-NIC.ARPA. 12345 IN     A       26.0.0.73 |
+                  |                            A       10.0.0.51 |
+                  +---------------------------------------------------+
+       Authority  | <empty>                                           |
+                  +---------------------------------------------------+
+       Additional | <empty>                                           |
+                  +---------------------------------------------------+
+
+Respuesta 2:
+
+           +---------------------------------------------------+
+       Header     | OPCODE=SQUERY, RESPONSE|
+                  +---------------------------------------------------+
+       Question   | QNAME=SRI-NIC.ARPA., QCLASS=IN, QTYPE=*|
+                  +---------------------------------------------------+
+       Answer     | SRI-NIC.ARPA. 1290 IN HINFO  DEC-2060 TOPS20|
+                  +---------------------------------------------------+
+       Authority  | <empty>                                           |
+                  +---------------------------------------------------+
+       Additional | <empty>                                           |
+                  +---------------------------------------------------+
+
+Ninguna de las respuestas tiene el bit AA, lo que indica que no provienen de datos autoritativos. Los contenidos y los TTLs son diferentes porque provienen de dos cachés correspondientes a dos servidores en diferentes momentos. El primer servidor almacena en caché la respuesta de una consulta QTYPE=A, mientras que el segundo almacena en caché la respuesta de una consulta HINFO.
+
+6.2.3. QNAME=SRI-NIC.ARPA, QTYPE=MX
+
+6.2.3. QNAME=SRI-NIC.ARPA, QTYPE=MX
+
+En este caso, la consulta es realizada por un programa de correo que intenta obtener información sobre el destino HOSTMASTER@SRI-NIC.ARPA. La respuesta desde C.ISI.EDU sería la siguiente:
+                  +---------------------------------------------------+
+       Header     | OPCODE=SQUERY, RESPONSE, AA|
+                  +---------------------------------------------------+
+       Question   | QNAME=SRI-NIC.ARPA., QCLASS=IN, QTYPE=MX|
+                  +---------------------------------------------------+
+       Answer     | SRI-NIC.ARPA. 86400 IN     MX      0 SRI-NIC.ARPA.|
+                  +---------------------------------------------------+
+       Authority  | <empty>                                           |
+                  +---------------------------------------------------+
+       Additional | SRI-NIC.ARPA. 86400 IN     A       26.0.0.73|
+                  |                            A       10.0.0.51      |
+                  +---------------------------------------------------+
+
+En esta respuesta, se encuentra el RR MX en la sección de respuesta. La sección adicional contiene los RRs de las direcciones, ya que el servidor de nombres C.ISI.EDU asume que el solicitante necesitará las direcciones para localizar la información del MX.
+
+6.2.4. QNAME=SRI-NIC.ARPA, QTYPE=NS
+
+En este caso, la consulta es para obtener los registros NS del dominio SRI-NIC.ARPA. La respuesta desde C.ISI.EDU sería la siguiente:
+
+                 +---------------------------------------------------+
+       Header     | OPCODE=SQUERY, RESPONSE, AA|
+                  +---------------------------------------------------+
+       Question   | QNAME=SRI-NIC.ARPA., QCLASS=IN, QTYPE=NS|
+                  +---------------------------------------------------+
+       Answer     | <empty>                                           |
+                  +---------------------------------------------------+
+       Authority  | <empty>                                           |
+                  +---------------------------------------------------+
+       Additional | <empty>                                           |
+                  +---------------------------------------------------+
+
+La única diferencia entre la respuesta y la pregunta es el bit AA y el bit RESPONSE en la cabecera. La interpretación de esta respuesta es que el servidor es autoritativo para el nombre, y el nombre existe, pero no hay registros del tipo NS para ese dominio.
+
+6.2.5. QNAME=SIR-NIC.ARPA, QTYPE=A
+
+En este caso, la consulta es para obtener el registro A del dominio SIR-NIC.ARPA. Sin embargo, el nombre de host es incorrecto. La respuesta desde C.ISI.EDU sería la siguiente:
+
+           +---------------------------------------------------+
+       Header     | OPCODE=SQUERY, RESPONSE, AA, RCODE=NE|
+                  +---------------------------------------------------+
+       Question   | QNAME=SIR-NIC.ARPA., QCLASS=IN, QTYPE=A|
+                  +---------------------------------------------------+
+       Answer     | <empty>                                           |
+                  +---------------------------------------------------+
+       Authority  | . SOA SRI-NIC.ARPA. HOSTMASTER.SRI-NIC.ARPA.|
+                  |       870611 1800 300 604800 86400|
+                  +---------------------------------------------------+
+       Additional | <empty>                                           |
+                  +---------------------------------------------------+
+
+Esta respuesta indica que el nombre no existe. Esta condición se indica en la cabecera, específicamente en la sección de código de respuesta (RCODE).
+
+El registro SOA en la sección de autoridad es la información opcional de caché negativa que indica al resolver que asuma que el nombre no existe para el SOA durante al menos 86400 segundos.
+
+6.2.6. QNAME=BRL.MIL, QTYPE=A
+
+Si se envía esta consulta a C.ISI.EDU, la respuesta sería la siguiente:
+
+         +---------------------------------------------------+
+       Header     | OPCODE=SQUERY, RESPONSE|
+                  +---------------------------------------------------+
+       Question   | QNAME=BRL.MIL, QCLASS=IN, QTYPE=A|
+      +---------------------------------------------------+
+       Answer     | <empty>                                           |
+                  +---------------------------------------------------+
+       Authority  | MIL.             86400 IN NS       SRI-NIC.ARPA.  |
+                  |                  86400    NS       A.ISI.EDU.     |
+                  +---------------------------------------------------+
+       Additional | A.ISI.EDU.                A        26.3.0.103     |
+                  | SRI-NIC.ARPA.             A        26.0.0.73      |
+                  |                           A        10.0.0.51      |
+                  +---------------------------------------------------+
+
+Esta respuesta tiene la sección de respuesta vacía, pero no es autoritativa. Es una referencia. El servidor de nombres C.ISI.EDU indica que no es autoritativo para el dominio MIL y se refiere a los servidores A.ISI.EDU y SRI-NIC.ARPA, ya que sabe que estos son autoritativos para el dominio MIL.
+
+6.2.7. QNAME=USC-ISIC.ARPA, QTYPE=A
+
+La respuesta a esta consulta desde A.ISI.EDU sería la siguiente:
+
+                 +---------------------------------------------------+
+       Header     | OPCODE=SQUERY, RESPONSE, AA|
+                  +---------------------------------------------------+
+       Question   | QNAME=USC-ISIC.ARPA., QCLASS=IN, QTYPE=A|
+                  +---------------------------------------------------+
+       Answer     | USC-ISIC.ARPA. 86400 IN CNAME      C.ISI.EDU.     |
+                  | C.ISI.EDU.     86400 IN A          10.0.0.52      |
+                  +---------------------------------------------------+
+       Authority  | <empty>                                           |
+                  +---------------------------------------------------+
+       Additional | <empty>                                           |
+                  +---------------------------------------------------+
+
+Nótese que el bit AA de la cabecera garantiza que el dato que coincide con QNAME es autoritativo, pero no dice nada sobre si el dato para C.ISI.EDU es autoritativo. Esta respuesta puede ser completa porque A.ISI.EDU parece ser autoritativo para ambos dominios ARPA, donde se encuentra USC-ISIC.ARPA, y en el dominio ISI.EDU se encuentran los datos de C.ISI.EDU.
+
+Si la misma consulta se enviara a C.ISI.EDU, la respuesta podría ser la misma que la anterior si su propia dirección estuviera en su caché. Sin embargo, también puede ser la siguiente:
+
+            +---------------------------------------------------+
+       Header     | OPCODE=SQUERY, RESPONSE, AA|
+            +---------------------------------------------------+
+       Question   | QNAME=USC-ISIC.ARPA., QCLASS=IN, QTYPE=A|
+                  +---------------------------------------------------+
+       Answer     | USC-ISIC.ARPA.   86400 IN CNAME   C.ISI.EDU.|
+                  +---------------------------------------------------+
+       Authority  | ISI.EDU.        172800 IN NS      VAXA.ISI.EDU.|
+                  |                           NS      A.ISI.EDU.      |
+                  |                           NS      VENERA.ISI.EDU. |
+                  +---------------------------------------------------+
+       Additional | VAXA.ISI.EDU.   172800    A       10.2.0.27|
+                  |                 172800    A       128.9.0.33      |
+                  | VENERA.ISI.EDU. 172800    A       10.1.0.52|
+                  |                 172800    A       128.9.0.32      |
+                  | A.ISI.EDU.      172800    A       26.3.0.103|
+                  +---------------------------------------------------+
+
+Esta respuesta es autoritativa para el alias USC-ISIC.ARPA y además hace referencia a los servidores de nombres de ISI.EDU. Aunque la consulta es para el nombre de host del servidor de nombres preguntado, este tipo de respuesta puede ser común para otros alias.
+
+6.2.8. QNAME=USC-ISIC.ARPA, QTYPE=CNAME
+
+Si esta consulta es enviada tanto a A.ISI.EDU o C.ISI.EDU, la respuesta
+   puede ser:
+
+                  +---------------------------------------------------+
+       Header     | OPCODE=SQUERY, RESPONSE, AA|
+                  +---------------------------------------------------+
+       Question   | QNAME=USC-ISIC.ARPA., QCLASS=IN, QTYPE=A|
+                  +---------------------------------------------------+
+       Answer     | USC-ISIC.ARPA. 86400 IN CNAME      C.ISI.EDU.|
+                  +---------------------------------------------------+
+       Authority  | <empty>                                           |
+                  +---------------------------------------------------+
+       Additional | <empty>                                           |
+                  +---------------------------------------------------+
+
+   Puesto que QTYPE=CNAME, el RR CNAME en sí responde la consulta, y el
+   servidor de nombres no intenta la búsqueda para C.ISI.EDU. (Puede tener
+   como excepción alguna posibilidad en la sección adicional).
+
+
+6.3. Resolución de ejemplo
+
+Los siguientes ejemplos ilustran las operaciones que debe realizar un resolutor para su cliente. Suponemos que el resolutor comienza sin caché, como en el caso de un inicio del sistema. También asumimos que el sistema no es un host que tenga datos de zona y que el host está ubicado en la red 26, con la siguiente información en su cinturón de seguridad (SBELT):
+
+Match count = -1
+SRI-NIC.ARPA.   26.0.0.73       10.0.0.51
+A.ISI.EDU.      26.3.0.103
+
+Esta información especifica los servidores para resolver nombres, sus direcciones y un contador de coincidencia establecido en -1, lo que indica que los servidores no están muy cerca del destino. Se debe tener en cuenta que -1 no es una medida precisa, sino un valor utilizado por el algoritmo en fases posteriores.
+
+Los siguientes ejemplos muestran el funcionamiento de la caché, por lo que cada ejemplo asume que la consulta anterior se completó.
+
+6.3.1. Resolver MX de ISI.EDU.
+
+Supongamos que la primera consulta del resolutor proviene de un programa de correo electrónico que tiene un correo electrónico para PVM@ISI.EDU. El programa de correo electrónico solicita los registros del tipo MX del dominio ISI.EDU.
+
+El resolutor puede buscar los registros MX de ISI.EDU en su caché, pero dado que la caché está vacía, no es útil. El resolutor puede reconocer que necesita consultar servidores externos e intentar determinar los mejores servidores para la consulta. Esto implica buscar los registros NS de los dominios ISI.EDU, EDU y el dominio raíz. Estos rastreos también pueden fallar si provienen de alguna caché. Como último recurso, el resolutor puede utilizar la información de su estructura SLIST, copiando los datos desde SBELT.
+
+En este punto, el resolutor necesita elegir una de las tres direcciones para probar. Dado que el resolutor está en la red 26, debería seleccionar primero entre 26.0.0.73 o 26.3.0.103. Luego puede enviar una consulta con el siguiente formato:
+
+           +---------------------------------------------------+
+       Header     | OPCODE=SQUERY                                     |
+                  +---------------------------------------------------+
+       Question   | QNAME=ISI.EDU., QCLASS=IN, QTYPE=MX               |
+                  +---------------------------------------------------+
+       Answer     | <empty>                                           |
+                  +---------------------------------------------------+
+       Authority  | <empty>                                           |
+                  +---------------------------------------------------+
+       Additional | <empty>                                           |
+      +---------------------------------------------------+
+
+El resolutor espera una respuesta o un tiempo de espera agotado. Si el tiempo de espera se agota, puede intentar nuevamente con servidores diferentes, es decir, diferentes direcciones para los mismos servidores, y en última instancia, puede utilizar direcciones ya utilizadas.
+
+El resolutor puede recibir una respuesta de SRI-NIC.ARPA:
+
+                 +---------------------------------------------------+
+       Header     | OPCODE=SQUERY, RESPONSE|
+                  +---------------------------------------------------+
+       Question   | QNAME=ISI.EDU., QCLASS=IN, QTYPE=MX|
+                  +---------------------------------------------------+
+       Answer     | <empty>                                           |
+                  +---------------------------------------------------+
+       Authority  | ISI.EDU.        172800 IN NS       VAXA.ISI.EDU.  |
+                  |                           NS       A.ISI.EDU.     |
+                  |                           NS       VENERA.ISI.EDU.|
+                  +---------------------------------------------------+
+       Additional | VAXA.ISI.EDU.   172800    A        10.2.0.27|
+                  |                 172800    A        128.9.0.33     |
+                  | VENERA.ISI.EDU. 172800    A        10.1.0.52|
+                  |                 172800    A        128.9.0.32     |
+                  | A.ISI.EDU.      172800    A        26.3.0.103|
+                  +---------------------------------------------------+
+
+El resolutor recibe una respuesta con una delegación cercana a ISI.EDU, donde coinciden las tres etiquetas con su SLIST. El resolutor puede almacenar en caché la información de la respuesta y utilizarla para crear un nuevo SLIST:
+
+      Match count = 3
+       A.ISI.EDU.      26.3.0.103
+       VAXA.ISI.EDU.   10.2.0.27       128.9.0.33
+       VENERA.ISI.EDU. 10.1.0.52       128.9.0.32
+A.ISI.EDU también aparece en esta lista como antes, pero es pura coincidencia. El resolutor puede reiniciar la transmisión y esperar respuestas. Eventualmente, puede recibir una respuesta:
+
+Header     | OPCODE=SQUERY, RESPONSE, AA|
+                  +---------------------------------------------------+
+       Question   | QNAME=ISI.EDU., QCLASS=IN, QTYPE=MX|
+                  +---------------------------------------------------+
+       Answer     | ISI.EDU.                MX 10 VENERA.ISI.EDU.|
+                  |                         MX 20 VAXA.ISI.EDU.       |
+      +---------------------------------------------------+
+       Authority  | <empty>                                           |
+                  +---------------------------------------------------+
+       Additional | VAXA.ISI.EDU.   172800  A  10.2.0.27|
+                  |                 172800  A  128.9.0.33             |
+                  | VENERA.ISI.EDU. 172800  A  10.1.0.52|
+                  |                 172800  A  128.9.0.32             |
+                  +---------------------------------------------------+
+
+El resolutor puede agregar esta información a su caché y devolver los registros MX a su cliente.
+
+6.3.2. Conseguir el nombre de host de la dirección 26.6.0.65
+
+El resolutor puede convertir esto en una consulta de registros PTR de 65.0.6.26.IN-ADDR.ARPA. Como esta información no está en la caché, el resolutor busca servidores para realizar la consulta. Si no hay servidores coincidentes, se utiliza nuevamente el SBELT. (Es importante tener en cuenta que los servidores del dominio ISI.EDU están en la caché, pero ISI.EDU no es un ancestro de 65.0.6.26.IN-ADDR.ARPA, por lo que se utiliza el SBELT).
+
+Debido a que esta consulta se encuentra en los datos autoritativos de ambos servidores en SBELT, eventualmente uno de ellos puede devolver la siguiente respuesta:
+
+                 +---------------------------------------------------+
+       Header     | OPCODE=SQUERY, RESPONSE, AA                       |
+                  +---------------------------------------------------+
+       Question   | QNAME=65.0.6.26.IN-ADDR.ARPA.,QCLASS=IN,QTYPE=PTR |
+                  +---------------------------------------------------+
+       Answer     | 65.0.6.26.IN-ADDR.ARPA.    PTR     ACC.ARPA.      |
+                  +---------------------------------------------------+
+       Authority  | <empty>                                           |
+                  +---------------------------------------------------+
+       Additional | <empty>                                           |
+                  +---------------------------------------------------+
+
+En esta respuesta, el resolutor obtiene el nombre de host correspondiente a la dirección IP 26.6.0.65, que es ACC.ARPA.
+
+6.3.3. Conseguir la dirección de host de poneria.ISI.EDU
+
+Esta consulta es una solicitud de tipo A para poneria.ISI.EDU. El resolutor puede que no tenga datos en caché para este nombre, pero puede encontrar registros NS en su caché para ISI.EDU cuando consulta servidores externos. Utilizando esta información, podemos construir una lista de servidores así:
+
+Coincidencias: 3
+
+A.ISI.EDU.      26.3.0.103
+VAXA.ISI.EDU.   10.2.0.27       128.9.0.33
+VENERA.ISI.EDU. 10.1.0.52
+
+A.ISI.EDU es el primero asumiendo que el resolutor ordena la lista de manera preferencial, y A.ISI.EDU está en la misma red.
+
+Uno de estos servidores puede proporcionar la respuesta a la pregunta.
+
+Bibliografía:
+Sistema de nombres de dominio - Wikipedia, la enciclopedia libre
+DNS (Sistema de Nombres de Dominio) - Explicado Fácilmente
+RFC 1034
+Chat GPT
